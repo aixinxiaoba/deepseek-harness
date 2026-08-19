@@ -1,0 +1,14 @@
+{
+  "name": "picker-electron",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ctx.directoryPicker native capability backed by Electron's dialog.showOpenDialog (runs in the Electron main process — no child worker)",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-host-directory-picker": "*"
+  }
+}

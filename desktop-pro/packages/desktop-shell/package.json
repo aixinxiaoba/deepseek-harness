@@ -1,0 +1,12 @@
+{
+  "name": "desktop-shell",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ctx.desktopShell: window, tray, and native lifecycle as a Host plugin over the loopback carrier",
+  "main": "index.js",
+  "exports": { ".": "./index.js" },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*"
+  }
+}

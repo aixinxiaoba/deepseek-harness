@@ -1,0 +1,44 @@
+# electron-builder config for dsh-desktop.
+# Bundles the Electron app, a self-contained dsh runtime (pnpm deploy output),
+# and a standalone Node runtime so the packaged app needs no system Node.
+
+appId: com.deepseek.dsh-desktop
+productName: DeepSeek Harness
+copyright: Copyright © 2026
+
+directories:
+  output: ../.tools/release
+  buildResources: build
+
+# Only our shell goes into the asar; the host runtime is bundled by the
+# afterPack hook (extraResources cannot be trusted with node_modules).
+files:
+  - main.js
+  - updater.cjs
+
+afterPack: ./after-pack.cjs
+
+win:
+  target:
+    # NSIS installer: install once, fast launches, Start Menu shortcut.
+    - target: nsis
+      arch:
+        - x64
+    # Zip: fallback for users who cannot run installers (extract once, run).
+    - target: zip
+      arch:
+        - x64
+
+nsis:
+  # Per-user install (%LOCALAPPDATA%\Programs): no admin needed AND the
+  # install dir stays user-writable, so the runtime updater's swap works
+  # without elevation. Do not enable allowToChangeInstallationDirectory —
+  # it invites Program Files installs that break the updater's writes.
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: DeepSeek Harness
+
+electronDownload:
+  mirror: https://cdn.npmmirror.com/binaries/electron/

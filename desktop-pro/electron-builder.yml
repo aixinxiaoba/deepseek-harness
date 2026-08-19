@@ -1,0 +1,60 @@
+# electron-builder config for DSH Desktop Pro (P2 packaging alignment).
+#
+# Key decisions (see docs/plan/desktop-pro-optimization-plan.md §C):
+# - asarUnpack node_modules: the Loader, profile-fallback junctions, and the
+#   updater's rename/apply all need PHYSICAL paths; an asar-virtual tree breaks
+#   them (DSH Desktop's documented lesson, and our own ENGINE_DIR physics).
+# - afterPack runs the runtime-closure gate: a build missing the CLI bootstrap,
+#   updater, embedded key, shell plugins, or native binaries FAILS.
+# - NSIS one-click per-user: our package-level update writes into the install
+#   dir, which must stay user-writable (deliberate divergence from
+#   installer-rerun update models that may elevate into Program Files).
+appId: io.github.aixinxiaoba.dsh-desktop-pro
+productName: DSH Desktop Pro
+copyright: Copyright © 2026
+
+directories:
+  output: ../.tools/release-pro
+  buildResources: build
+
+files:
+  - main.cjs
+  - updater.cjs
+  - log.cjs
+  - embedded-key.cjs
+  - package.json
+  - build/icon.png
+
+asarUnpack:
+  - node_modules/**
+
+afterPack: ./scripts/verify-packaged-runtime.cjs
+
+# node-pty ships Node-API prebuilds (ABI-stable across Electron 37/Node 22);
+# @electron/rebuild would need a full VS toolchain for zero benefit.
+npmRebuild: false
+buildDependenciesFromSource: false
+
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: DSH Desktop Pro
+  # useZip avoids NSIS's weaker LZMA variant; differential packages are
+  # pointless here (engine updates ship as signed package deltas, not
+  # installers).
+  useZip: true
+  differentialPackage: false
+
+electronDownload:
+  mirror: https://cdn.npmmirror.com/binaries/electron/
+
+compression: maximum

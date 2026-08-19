@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>DSH Desktop Pro · 首次设置</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: 'Segoe UI', system-ui, sans-serif;
+    display: flex; align-items: center; justify-content: center; min-height: 100vh;
+    background: #f5f7fa; color: #1c2333;
+  }
+  @media (prefers-color-scheme: dark) { body { background: #14181f; color: #e6e9f0; } }
+  .card {
+    width: 520px; max-width: 92vw; padding: 32px; border-radius: 16px;
+    background: rgba(255,255,255,.9); box-shadow: 0 12px 40px rgba(16,24,40,.14);
+  }
+  @media (prefers-color-scheme: dark) { .card { background: rgba(30,36,48,.92); } }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  p.sub { margin: 0 0 22px; color: #5b6472; font-size: 13px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+  label .opt { font-weight: 400; color: #7a8494; }
+  input[type=text], input[type=password] {
+    width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #c9d1dc;
+    font-size: 14px; font-family: inherit; background: transparent; color: inherit;
+  }
+  input:focus { outline: 2px solid #446cbe; border-color: transparent; }
+  .hint { font-size: 12px; color: #7a8494; margin-top: 4px; }
+  .row { display: flex; gap: 10px; margin-top: 26px; justify-content: flex-end; }
+  button {
+    padding: 10px 22px; border-radius: 8px; border: 0; font-size: 14px; cursor: pointer; font-family: inherit;
+  }
+  #skip { background: transparent; color: inherit; }
+  #save { background: #446cbe; color: #fff; font-weight: 600; }
+  #save:disabled { opacity: .5; cursor: default; }
+  .done { text-align: center; padding: 30px 0 10px; display: none; }
+  .done h2 { margin: 12px 0 4px; }
+</style>
+</head>
+<body>
+  <div class="card" id="form">
+    <h1>欢迎使用 DSH Desktop Pro</h1>
+    <p class="sub">两步可选配置，随时可以在系统中修改。</p>
+
+    <label for="key">DeepSeek API Key <span class="opt">（推荐）</span></label>
+    <input id="key" type="password" placeholder="sk-..." autocomplete="off" />
+    <div class="hint">存入本机凭据库（~/.dsh/.credentials.yaml），用于对话模型调用。可先跳过，之后在应用内设置里填写。</div>
+
+    <label for="url">更新服务器 <span class="opt">（可选）</span></label>
+    <input id="url" type="text" placeholder="https://updates.example.com" />
+    <div class="hint">配置后，应用会自动检查并增量更新运行时（Ed25519 签名验证）。</div>
+
+    <div class="row">
+      <button id="skip">跳过</button>
+      <button id="save">完成设置</button>
+    </div>
+  </div>
+  <div class="card done" id="done">
+    <h2>✓ 设置完成</h2>
+    <p class="sub">窗口即将关闭，进入主界面。</p>
+  </div>
+<script>
+  const { dshPro } = window
+  const done = () => {
+    document.getElementById('form').style.display = 'none'
+    document.getElementById('done').style.display = 'block'
+    setTimeout(() => dshPro.finish(), 700)
+  }
+  document.getElementById('skip').addEventListener('click', () => done())
+  document.getElementById('save').addEventListener('click', async () => {
+    const btn = document.getElementById('save')
+    btn.disabled = true
+    try {
+      await dshPro.save({
+        apiKey: document.getElementById('key').value.trim(),
+        updateUrl: document.getElementById('url').value.trim(),
+      })
+      done()
+    } catch (err) {
+      btn.disabled = false
+      alert(`保存失败：${err.message}`)
+    }
+  })
+</script>
+</body>
+</html>
