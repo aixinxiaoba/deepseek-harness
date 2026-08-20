@@ -43,8 +43,14 @@ win:
         - x64
 
 nsis:
-  oneClick: true
+  # Assisted install: the oneClick variant shows only an indeterminate
+  # marquee over a ~10-minute, 18k-file copy — operators cannot tell progress
+  # from a hang. The assisted wizard shows a real file-percentage bar while
+  # keeping the per-user default directory (no dir picker, so the updater's
+  # user-writable guarantee holds).
+  oneClick: false
   perMachine: false
+  allowToChangeInstallationDirectory: false
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: DSH Desktop Pro

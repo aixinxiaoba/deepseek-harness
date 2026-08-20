@@ -51,6 +51,16 @@
     <input id="url" type="text" placeholder="https://updates.example.com" />
     <div class="hint">配置后，应用会自动检查并增量更新运行时（Ed25519 签名验证）。</div>
 
+    <details style="margin-top:18px">
+      <summary style="cursor:pointer;font-size:13px;color:#5b6472">安装/启动慢？点开查看加速方法</summary>
+      <div class="hint" style="margin-top:8px">
+        应用包含约 1.8 万个文件，Windows Defender 会在安装和首次启动时逐个扫描。<br />
+        用<strong>管理员 PowerShell</strong> 执行下面的命令加入排除，可显著提速：
+      </div>
+      <input type="text" readonly value="Add-MpPreference -ExclusionPath &quot;$env:LOCALAPPDATA\Programs\dsh-desktop-pro&quot;" style="font-family:Consolas,monospace;font-size:12px" onclick="this.select()" />
+      <div class="hint">权衡：该目录不再实时扫描；完整性由更新的 Ed25519 签名验证保障。</div>
+    </details>
+
     <div class="row">
       <button id="skip">跳过</button>
       <button id="save">完成设置</button>
