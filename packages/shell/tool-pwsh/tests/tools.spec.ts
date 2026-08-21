@@ -562,6 +562,10 @@ describe('sandbox escalation through ctx.approval', () => {
     expect(schema.description).toContain('workspace-write stays in FullLanguage')
     expect(schema.description).toContain('In both confined modes, programs cannot open named pipes')
     expect(schema.description).toContain('fails with EPERM')
+    expect(schema.description).toContain('WMI/CIM is likewise unavailable under every confined mode')
+    expect(schema.description).toContain('Microsoft.VisualBasic.Devices.ComputerInfo')
+    expect(schema.description).toContain('HTTPS clients built on Windows schannel')
+    expect(schema.description).toContain('SEC_E_NO_CREDENTIALS')
 
     for (const args of [
       { command: 'Write-Output ok', description: 'd', sandbox_permissions: 'workspace-write' },
@@ -577,6 +581,8 @@ describe('sandbox escalation through ctx.approval', () => {
     const schema = ctx.tools.schemas().find(item => item.name === 'pwsh')!
     expect(schema.description).not.toContain('ConstrainedLanguage')
     expect(schema.description).not.toContain('named pipes')
+    expect(schema.description).not.toContain('WMI/CIM')
+    expect(schema.description).not.toContain('schannel')
     expect(schema.description).not.toContain('sandbox_permissions')
     expect(schema.parameters.properties).not.toHaveProperty('sandbox_permissions')
   })
