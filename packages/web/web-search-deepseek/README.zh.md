@@ -42,7 +42,7 @@ DeepSeek 返回的提供方生成答案均不被该提供方信任为 `content`�
 
 结果按 URL 去重，因为一次请求可能在多次搜索中呈现同一页面。DeepSeek 公开 `maxUses` 而非结果数量旋钮，因此 seam 会强制执行 `maxResults`：截断 `sources[]` 并设置 `truncated`。
 
-提供方失败变为 `WEB_PROVIDER_ERROR`；调用方取消变为 `WEB_ABORTED`。HTTP 重定向会在接触 `Location` 目标前被拒绝，并以 `WEB_PROVIDER_ERROR` 呈现。
+提供方失败变为 `WEB_PROVIDER_ERROR`；调用方取消变为 `WEB_ABORTED`。HTTP 重定向会在接触 `Location` 目标前被拒绝，并以 `WEB_PROVIDER_ERROR` 呈现。HTTP 401/403 属于配置类失败而非瞬态失败，变为 `WEB_PROVIDER_AUTH_FAILED` 并附带指引：已解析的凭据不被**本端点**接受——常见形态是 settings 的 `llm-deepseek:` 段把聊天改道到另一平台，而该平台的 key 存在 `DEEPSEEK_API_KEY` 里，本提供方却仍把它发给 `api.deepseek.com`。修复方式：为签发该 key 的平台单独设置 web-search-deepseek 的 `baseURL`/`apiKey`、存入 DeepSeek 平台 key，或挂载其他搜索提供方。
 
 ## 请求日志
 

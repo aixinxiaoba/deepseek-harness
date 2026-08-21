@@ -256,6 +256,23 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
         // malformed/non-JSON error body (normal for gateway 5xx/429s) can only
         // cost a richer provider message, never the real error.
       }
+      // Authentication rejection is a CONFIGURATION class of failure, not a
+      // transient provider error: the resolved credential does not open THIS
+      // endpoint. The common shape (pinned by a live incident): chat works
+      // because a settings `llm-deepseek:` section reroutes it to another
+      // platform whose key then lives in DEEPSEEK_API_KEY, while this provider
+      // still sends it to api.deepseek.com. Say so instead of letting the model
+      // retry a request no retry can fix.
+      if (status === 401 || status === 403) {
+        const ref = options.apiKeyEnv ?? 'DEEPSEEK_API_KEY'
+        throw new WebError(
+          `${message} — the "${ref}" credential was rejected by ${endpoint} (HTTP ${status}). `
+          + 'When chat\'s llm-deepseek baseURL is overridden to another platform, the shared key belongs to THAT platform, '
+          + 'not api.deepseek.com: set web-search-deepseek\'s own baseURL and apiKey for the platform that issued the key, '
+          + 'store a DeepSeek-platform key, or mount a different search provider.',
+          'WEB_PROVIDER_AUTH_FAILED',
+        )
+      }
       throw new WebError(message, 'WEB_PROVIDER_ERROR')
     }
 

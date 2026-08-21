@@ -42,7 +42,7 @@ DeepSeek returns no provider-generated answer content this provider trusts as `c
 
 Results are deduplicated by URL because one request may surface the same page across searches. DeepSeek exposes `maxUses`, not a result-count knob, so the seam enforces `maxResults` by truncating `sources[]` and setting `truncated`.
 
-Provider failures become `WEB_PROVIDER_ERROR`; caller cancellation becomes `WEB_ABORTED`. HTTP redirects are rejected before the `Location` target is contacted and surface as `WEB_PROVIDER_ERROR`.
+Provider failures become `WEB_PROVIDER_ERROR`; caller cancellation becomes `WEB_ABORTED`. HTTP redirects are rejected before the `Location` target is contacted and surface as `WEB_PROVIDER_ERROR`. An HTTP 401/403 is a configuration failure, not a transient one, and becomes `WEB_PROVIDER_AUTH_FAILED` with guidance: the resolved credential is not accepted by THIS endpoint — the common shape is a settings `llm-deepseek:` section rerouting chat to another platform whose key then lives in `DEEPSEEK_API_KEY`, while this provider still sends it to `api.deepseek.com`. Fix it by setting web-search-deepseek's own `baseURL`/`apiKey` for the platform that issued the key, storing a DeepSeek-platform key, or mounting a different search provider.
 
 ## Request logging
 

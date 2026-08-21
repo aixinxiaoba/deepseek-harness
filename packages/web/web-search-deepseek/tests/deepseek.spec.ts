@@ -7,6 +7,7 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import WebRuntime from '@deepseek-ai/dsh-web'
+import type { WebError } from '@deepseek-ai/dsh-web'
 import {
   DeepSeekSearchProvider,
   DEEPSEEK_PROVIDER_ID,
@@ -323,6 +324,30 @@ describe('DeepSeekSearchProvider error handling', () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ error: { message: 'rate limited' } }, { status: 429 })))
     await expect(searchProvider(options).search({ query: 'q' }))
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_ERROR', message: 'rate limited' }))
+  })
+
+  it('classifies a 401 as WEB_PROVIDER_AUTH_FAILED with the cross-platform credential guidance', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      jsonResponse({ error: { message: 'Authentication Fails, Your api key: ****abcd is invalid' } }, { status: 401 })))
+    const error = await searchProvider(options).search({ query: 'q' }).catch((e: unknown) => e) as WebError
+    expect(error.code).toBe('WEB_PROVIDER_AUTH_FAILED')
+    expect(error.message).toContain('Authentication Fails, Your api key: ****abcd is invalid')
+    expect(error.message).toContain('the "DEEPSEEK_API_KEY" credential was rejected by https://api.deepseek.test/anthropic/v1/messages (HTTP 401)')
+    expect(error.message).toContain('set web-search-deepseek\'s own baseURL and apiKey')
+  })
+
+  it('classifies a 403 as WEB_PROVIDER_AUTH_FAILED even with a non-JSON error body', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('forbidden', { status: 403 })))
+    const error = await searchProvider(options).search({ query: 'q' }).catch((e: unknown) => e) as WebError
+    expect(error.code).toBe('WEB_PROVIDER_AUTH_FAILED')
+    expect(error.message).toContain('DeepSeek API error (HTTP 403)')
+  })
+
+  it('names the configured credential reference, not just the default, in the auth-failure guidance', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ error: { message: 'no access' } }, { status: 401 })))
+    const error = await searchProvider({ ...options, apiKeyEnv: credentialRef('OTHER_KEY') }).search({ query: 'q' })
+      .catch((e: unknown) => e) as WebError
+    expect(error.message).toContain('the "OTHER_KEY" credential was rejected')
   })
 
   it('handles a string-form error body', async () => {
