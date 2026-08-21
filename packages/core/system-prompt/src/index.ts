@@ -130,6 +130,60 @@ export const PERSONA_SECTION = 'deployment:persona'
 /** Prompt order of the persona slot; the first section a model reads. */
 export const PERSONA_ORDER = 0
 
+/**
+ * The harness-owned current-date/time section name and order. The model cannot
+ * know the current date from its weights, so this fact is rendered fresh at
+ * every assembly, ordered after identity/source and before the persona.
+ */
+export const CLOCK_SECTION = 'harness:clock'
+
+/** Prompt order of the clock fact; between the harness identity and the persona. */
+export const CLOCK_ORDER = -98
+
+/** Minutes in one hour, for UTC-offset formatting. */
+const MINUTES_PER_HOUR = 60
+
+/** English weekday name for a JavaScript day-of-week index. */
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+/** Two-digit zero padding for clock fields. */
+function pad2(value: number): string {
+  return value < 10 ? `0${value}` : String(value)
+}
+
+/** Timezone offset in `UTC±HH:MM` form for a local `Date`. */
+function formatUtcOffset(date: Date): string {
+  const offsetMinutes = -date.getTimezoneOffset()
+  // The negative branch (zones west of UTC) cannot execute on the UTC CI coverage lane.
+  /* v8 ignore next -- western-zone hosts only; the coverage lane runs at UTC */
+  const sign = offsetMinutes < 0 ? '-' : '+'
+  const abs = Math.abs(offsetMinutes)
+  return `UTC${sign}${pad2(Math.floor(abs / MINUTES_PER_HOUR))}:${pad2(abs % MINUTES_PER_HOUR)}`
+}
+
+/**
+ * Local date in `YYYY-MM-DD (Weekday)` form — the value behind the
+ * `{{current_date}}` prompt variable, e.g. `2026-08-20 (Thursday)`.
+ * Pure and locale-independent; pass a fixed `Date` in tests.
+ * @param date - the instant to format (defaults to now).
+ */
+export function formatCurrentDate(date: Date = new Date()): string {
+  const iso = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+  return `${iso} (${WEEKDAY_NAMES[date.getDay()]})`
+}
+
+/**
+ * The built-in clock fact rendered as the {@link CLOCK_SECTION} section: local
+ * date, weekday, local time, and UTC offset, so the model can reason about
+ * "today" in the operator's zone. Pure and locale-independent; pass a fixed
+ * `Date` in tests.
+ * @param date - the instant to format (defaults to now).
+ * @returns e.g. `Today's date is 2026-08-20 (Thursday). Current local time is 22:53 (UTC+08:00).`
+ */
+export function formatCurrentClock(date: Date = new Date()): string {
+  return `Today's date is ${formatCurrentDate(date)}. Current local time is ${pad2(date.getHours())}:${pad2(date.getMinutes())} (${formatUtcOffset(date)}).`
+}
+
 /** Valid variable names: how they are written between the braces. */
 const VARIABLE_NAME = /^[a-z][a-z0-9_]*$/
 
@@ -188,6 +242,8 @@ export interface Config {
   includeHarnessIdentity?: boolean
   /** Include dynamic runtime-context snapshots in model history (default true). */
   includeRuntimeContext?: boolean
+  /** Include the per-assembly clock fact (`harness:clock`) so the model knows the current date/time (default true). */
+  includeCurrentDate?: boolean
   /**
    * Deployment-wide order-0 persona template. A scoped section named
    * `deployment:persona` shadows it; `{{variable}}` references are strict.
@@ -339,6 +395,7 @@ export class SystemPrompt extends Service {
   static Config: z<Config> = z.object({
     includeHarnessIdentity: z.boolean().default(true),
     includeRuntimeContext: z.boolean().default(true),
+    includeCurrentDate: z.boolean().default(true),
     persona: z.string().default(''),
     // Preserve omission because an explicit empty order lacks the rest marker.
     toolOrder: z.array(z.string()).default(undefined as unknown as string[]),
@@ -359,6 +416,17 @@ export class SystemPrompt extends Service {
         name: 'harness:identity',
         order: -100,
         text: 'You are an AI agent powered by DeepSeek Harness.',
+      })
+    }
+    // The clock fact is available as a `{{current_date}}` variable for personas
+    // that want to reference it, and rendered as a section by default so the
+    // model knows today's date/time even when no persona references it.
+    this.variable('current_date', () => formatCurrentDate())
+    if (config.includeCurrentDate ?? true) {
+      this.section({
+        name: CLOCK_SECTION,
+        order: CLOCK_ORDER,
+        text: () => formatCurrentClock(),
       })
     }
     this.section({

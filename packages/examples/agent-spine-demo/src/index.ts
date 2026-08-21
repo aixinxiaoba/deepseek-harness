@@ -98,6 +98,8 @@ export interface Config {
   includeHarnessIdentity?: SystemPromptConfig['includeHarnessIdentity']
   /** Whether model history includes dynamic runtime-context snapshots (default true). */
   includeRuntimeContext?: SystemPromptConfig['includeRuntimeContext']
+  /** Whether the system prompt includes the per-assembly clock fact (default true). */
+  includeCurrentDate?: SystemPromptConfig['includeCurrentDate']
   /** The deployment persona (see dsh-system-prompt's `Config`). */
   persona?: SystemPromptConfig['persona']
   /** The explicit model-facing tool order (see dsh-system-prompt's `Config`). */
@@ -184,6 +186,7 @@ export function pickSpineConfig(config: Omit<Config, 'agents'>): Omit<Config, 'a
     ...config.maxParallelToolCalls !== undefined ? { maxParallelToolCalls: config.maxParallelToolCalls } : {},
     ...config.includeHarnessIdentity !== undefined ? { includeHarnessIdentity: config.includeHarnessIdentity } : {},
     ...config.includeRuntimeContext !== undefined ? { includeRuntimeContext: config.includeRuntimeContext } : {},
+    ...config.includeCurrentDate !== undefined ? { includeCurrentDate: config.includeCurrentDate } : {},
     ...config.persona !== undefined ? { persona: config.persona } : {},
     ...config.toolOrder !== undefined ? { toolOrder: config.toolOrder } : {},
     ...config.tools !== undefined ? { tools: config.tools } : {},
@@ -225,6 +228,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.plugin(SystemPrompt, {
     includeHarnessIdentity: config.includeHarnessIdentity ?? true,
     includeRuntimeContext: config.includeRuntimeContext ?? true,
+    includeCurrentDate: config.includeCurrentDate ?? true,
     persona: config.persona ?? '',
     ...config.toolOrder !== undefined ? { toolOrder: config.toolOrder } : {},
   })

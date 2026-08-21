@@ -19,7 +19,8 @@ describe('installModelSelection()', () => {
     const seed: LlmCallConfig = { provider: 'seed', model: 'seed', temperature: 0.2 }
     const signal = new AbortController().signal
 
-    expect((await ctx.systemPrompt.assemble()).variables).toEqual({})
+    const beforeSelection = await ctx.systemPrompt.assemble()
+    expect(Object.keys(beforeSelection.variables)).toEqual(['current_date'])
     await expect(agentEvents(ctx, agent).waterfall(
       'agent/request', { turn: 1, step: 0, signal }, () => Promise.resolve(seed),
     )).resolves.toBe(seed)
@@ -52,7 +53,8 @@ describe('installModelSelection()', () => {
     )).resolves.toEqual({ provider: 'beta', model: 'b1', temperature: 0.2 })
 
     dispose()
-    expect((await ctx.systemPrompt.assemble()).variables).toEqual({})
+    const afterDispose = await ctx.systemPrompt.assemble()
+    expect(Object.keys(afterDispose.variables)).toEqual(['current_date'])
     await expect(agentEvents(ctx, agent).waterfall(
       'agent/request', { turn: 2, step: 0, signal }, () => Promise.resolve(seed),
     )).resolves.toBe(seed)

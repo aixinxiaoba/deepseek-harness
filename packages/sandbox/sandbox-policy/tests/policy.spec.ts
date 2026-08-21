@@ -144,7 +144,10 @@ describe('SandboxPolicyService', () => {
 describe('sandbox:policy request context', () => {
   async function promptMounted(config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string } = {}): Promise<Context> {
     const ctx = new Context()
-    await ctx.plugin(SystemPrompt)
+    // Byte-stability assertions below compare whole rendered prompts across
+    // reassembly; the clock fact is genuinely time-varying, so it is disabled
+    // here (its own behavior is pinned in the system-prompt package).
+    await ctx.plugin(SystemPrompt, { includeCurrentDate: false })
     await ctx.plugin(SandboxPolicyService, config)
     return ctx
   }
