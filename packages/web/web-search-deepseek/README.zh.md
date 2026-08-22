@@ -25,16 +25,40 @@ Exa 和 Perplexity 提供专用搜索端点，DeepSeek 则没有。该提供方�
 | `apiVersion` | `2023-06-01` | `anthropic-version` 标头值。 |
 | `maxTokens` | `4096` | Messages 请求生成 token 的正整数上限。 |
 | `maxUses` | `5` | 每次请求使用 `web_search` 服务器工具的正整数上限。 |
+| `protocol` | `anthropic` | 单一 legacy 端点的线格式：`anthropic`（Messages `{baseURL}/messages` + `web_search_20250305`）或 `openai`（`{baseURL}/chat/completions`）；`openai` 需要 `baseURL`。`providers` 中的具名后端一律用 `openai`。 |
+| `providers` | `{}` | 具名 OpenAI 后端（`{ ark: {…}, zhipu: {…} }`），每个 `{ baseURL, apiKeyEnv?, model?, allowProseFallback? }`，按次路由（见下）。 |
 
 ```yaml
 - id: web-search-deepseek
   name: '@deepseek-ai/dsh-web-search-deepseek'
   config:
-    apiKeyEnv: DEEPSEEK_API_KEY
-    baseURL: https://gateway.internal/anthropic/v1
+    protocol: openai
+    providers:
+      ark:
+        baseURL: https://ark.cn-beijing.volces.com/api/coding/v3
+        apiKeyEnv: DEEPSEEK_API_KEY
+        model: deepseek-v4-flash
+        allowProseFallback: true
+      zhipu:
+        baseURL: https://open.bigmodel.cn/api/coding/paas/v4
+        apiKeyEnv: ZAI_CODING_CN_API_KEY
+        model: glm-5.3
+        allowProseFallback: true
 ```
 
 上面的条目是 `web-search-deepseek` Settings 段的 base 层：叠加其上的用户层会作用于**下一次**搜索，因为提供方是按次投影该段，而不是在注册时固化它。因此端点或模型变化时，seam 的提供方选择不会闪断。`apiKey` 带有 `role('secret')`，所以它在任何一层都不会出现在 `describe()` 响应中——配置表层只能知道 credentials 领域是否为 `apiKeyEnv` 所命名的引用持有值，而无从知道某一层是否带着字面密钥。
+
+## OpenAI 方言：多后端路由
+
+当聊天被改道到 OpenAI 兼容网关（火山方舟、智谱、qwen 等），且 `DEEPSEEK_API_KEY` 打开的是该网关而非 `api.deepseek.com` 时，本提供方也可以讲 `openai` 方言、从同一网关回答。`providers` 里每个条目各是一个可搜索后端，自带端点、凭据引用、模型与 prose 兜底策略。
+
+后端按次解析，优先级如下：
+
+1. **显式 `backend`**——`web_search` 工具的可选 `backend` 参数（即 `WebSearchRequest.backend`）点名某个已配置条目；未知名抛错。
+2. **按前端选中的模型自动匹配**——未给 `backend` 时，`model` 等于 `ctx.agentDefaultModel.currentSelection().model` 的那个后端被采用；前端切换模型即自动切换搜索后端。多个条目声明同一 `model` 时作为响亮歧义错误抛出。
+3. **legacy 单端点**——`protocol`/`baseURL`/`apiKeyEnv`/`model` 配置（缺省为 DeepSeek Anthropic 端点）。
+
+OpenAI 方言发 `{baseURL}/chat/completions`，同时带 `Authorization: Bearer` 与 `x-api-key`，并解析 `choices[0].message`：结构化 `message.citations` 直接映射；否则只有当该后端 `allowProseFallback` 为 true 时才从答案 prose 中抽取 `[label](url)` markdown 链接与裸 URL（按 URL 去重，markdown 标签成为 title），并把答案文本作为 `content`。当 `allowProseFallback` 关闭且没有结构化 citations 时，无 URL 的答案抛 `WEB_PROVIDER_ERROR`——下面为 Anthropic 路径保留的严格姿态继续保持为默认。
 
 ## 映射
 

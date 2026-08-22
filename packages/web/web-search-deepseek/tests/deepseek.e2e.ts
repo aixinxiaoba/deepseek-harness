@@ -31,6 +31,8 @@ maybe('DeepSeekSearchProvider real API', () => {
       apiVersion: DEEPSEEK_DEFAULT_API_VERSION,
       maxTokens: DEEPSEEK_DEFAULT_MAX_TOKENS,
       maxUses: DEEPSEEK_DEFAULT_MAX_USES,
+      protocol: 'anthropic',
+      allowProseFallback: false,
     })
     const result = await provider.search({ query: 'What is DeepSeek Harness?', maxResults: 5 })
     expect(result.sources.length).toBeGreaterThan(0)

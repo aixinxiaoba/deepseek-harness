@@ -47,3 +47,34 @@ export interface AnthropicError {
   error?: { message?: string } | string
   message?: string
 }
+
+/**
+ * OpenAI-compatible `/chat/completions` wire types for the protocol's prose
+ * dialect. Searchable OpenAI-style gateways (Volcano Ark / Zhipu / Qwen) answer
+ * with the model's prose; citeable URLs live either in a structured
+ * `message.citations` array or embedded as markdown links in `content`.
+ */
+export interface OpenAiCitation {
+  /** Citeable URL; empty/absent citations are skipped. */
+  url?: string | null
+  /** Optional display title for the citation. */
+  title?: string | null
+}
+
+export interface OpenAiMessage {
+  /** The model's answer prose (the source of markdown-link search results). */
+  content?: string | null
+  /** Structured citations when the endpoint emits them. */
+  citations?: OpenAiCitation[] | null
+}
+
+/** OpenAI-compatible `/chat/completions` response envelope. */
+export interface OpenAiResponse {
+  choices?: Array<{ message?: OpenAiMessage }>
+}
+
+/** OpenAI-compatible `/chat/completions` error envelope (best-effort). */
+export interface OpenAiError {
+  error?: { message?: string } | string
+  message?: string
+}

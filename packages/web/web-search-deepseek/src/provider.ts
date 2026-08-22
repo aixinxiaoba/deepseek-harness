@@ -19,6 +19,8 @@ import type {
   AnthropicError,
   AnthropicResponse,
   ContentBlock,
+  OpenAiError,
+  OpenAiResponse,
   TextBlock,
   WebSearchToolResultBlock,
 } from './types.ts'
@@ -46,35 +48,54 @@ export const DEEPSEEK_DEFAULT_MAX_TOKENS = 4096
 /** Default maximum `web_search` server-tool uses per request. */
 export const DEEPSEEK_DEFAULT_MAX_USES = 5
 
+/** Wire protocol a search backend answers with. */
+export type SearchProtocol = 'anthropic' | 'openai'
+
+/** Default wire protocol: Anthropic-compatible Messages (DeepSeek official). */
+export const DEEPSEEK_DEFAULT_PROTOCOL: SearchProtocol = 'anthropic'
+
 /** Attribution header sent on every request. Bump with the package version. */
 const USER_AGENT = 'deepseek-harness/0.0.1'
 
+/** Anthropic Messages request body ({@link DeepSeekSearchLlmRequest.body}). */
+export interface DeepSeekSearchAnthropicBody {
+  readonly model: string
+  readonly max_tokens: number
+  readonly messages: readonly [{
+    readonly role: 'user'
+    readonly content: readonly [{
+      readonly type: 'text'
+      readonly text: string
+    }]
+  }]
+  readonly tools: readonly [{
+    readonly type: 'web_search_20250305'
+    readonly name: 'web_search'
+    readonly max_uses: number
+  }]
+}
+
+/** OpenAI `/chat/completions` request body ({@link DeepSeekSearchLlmRequest.body}). */
+export interface DeepSeekSearchOpenAiBody {
+  readonly model: string
+  readonly max_tokens: number
+  readonly messages: readonly [{
+    readonly role: 'user'
+    readonly content: string
+  }]
+}
+
 /**
- * Exact secret-free DeepSeek Messages request recorded immediately before one
- * auxiliary search dispatch.
+ * Exact secret-free search request recorded immediately before one auxiliary
+ * search dispatch. `body` is the provider's either protocol dialect.
  */
 export interface DeepSeekSearchLlmRequest {
-  /** Fully resolved Messages endpoint. */
+  /** Fully resolved search endpoint. */
   readonly endpoint: string
   /** `anthropic-version` header value. */
   readonly apiVersion: string
   /** Exact JSON body sent to the provider. */
-  readonly body: {
-    readonly model: string
-    readonly max_tokens: number
-    readonly messages: readonly [{
-      readonly role: 'user'
-      readonly content: readonly [{
-        readonly type: 'text'
-        readonly text: string
-      }]
-    }]
-    readonly tools: readonly [{
-      readonly type: 'web_search_20250305'
-      readonly name: 'web_search'
-      readonly max_uses: number
-    }]
-  }
+  readonly body: DeepSeekSearchAnthropicBody | DeepSeekSearchOpenAiBody
 }
 
 declare module '@deepseek-ai/dsh-session/types' {
@@ -98,10 +119,18 @@ export interface DeepSeekSearchProviderOptions {
   model: string
   /** `anthropic-version` header value. */
   apiVersion: string
-  /** Upper bound on generated tokens for the Messages request. */
+  /** Upper bound on generated tokens for the request. */
   maxTokens: number
   /** Maximum `web_search` server-tool uses per request. */
   maxUses: number
+  /** Wire protocol the resolved endpoint answers with. */
+  protocol: SearchProtocol
+  /**
+   * Whether to extract citeable URLs from the model's prose when an
+   * OpenAI-style backend returns no structured search fields. Defaults to
+   * false (strict): a prose-only answer that yields no sources is an error.
+   */
+  allowProseFallback: boolean
   /**
    * Record the exact secret-free request immediately before dispatch. A throw
    * prevents dispatch so model-visible auxiliary input cannot escape logging.
@@ -173,21 +202,83 @@ export function mapAnthropicResponse(response: AnthropicResponse): WebSearchResu
   return { sources, truncated: false }
 }
 
+/**
+ * Map an OpenAI-compatible `/chat/completions` response to a normalized search
+ * result. Structured `message.citations` map directly; when none are present a
+ * prose fallback (only when {@link DeepSeekSearchProviderOptions.allowProseFallback})
+ * extracts `[label](url)` markdown links and bare URLs from the model's answer.
+ * Sources dedupe by URL (markdown-labelled wins for its title). The model's
+ * answer text becomes the result's `content`. Strict mode throws when no source
+ * can be parsed.
+ *
+ * @param response - the parsed `/chat/completions` body.
+ * @param allowProseFallback - whether to extract URLs from the model's prose.
+ * @returns the normalized result with deduped sources and the answer text.
+ * @throws {@link WebError} when no source was parsed.
+ */
+export function mapOpenAIResponse(response: OpenAiResponse, allowProseFallback: boolean): WebSearchResult {
+  const message = response.choices?.[0]?.message
+  const prose = message?.content ?? ''
+  const seen = new Set<string>()
+  const sources: WebSearchSource[] = []
+
+  const push = (url: string, title?: string): void => {
+    if (url.length === 0 || seen.has(url)) return
+    seen.add(url)
+    sources.push({ url, ...title !== undefined && title.length > 0 ? { title } : {} })
+  }
+
+  for (const citation of message?.citations ?? []) {
+    push(citation.url ?? '', citation.title ?? undefined)
+  }
+
+  if (sources.length === 0 && allowProseFallback && prose.length > 0) {
+    // `[label](url)` markdown links first (they carry a display title).
+    for (const match of prose.matchAll(/\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/gu)) {
+      push(match[2] as string, match[1])
+    }
+    // Bare URLs not already captured by a markdown link.
+    const bare = prose.match(/https?:\/\/[^\s<>"')]+/gu) ?? []
+    for (const url of bare) {
+      if (!seen.has(url)) push(url)
+    }
+  }
+
+  if (sources.length === 0) {
+    throw new WebError(
+      'DeepSeek search returned no parseable source URLs; the request may not have triggered a web search',
+      'WEB_PROVIDER_ERROR',
+    )
+  }
+
+  return {
+    ...prose.trim().length > 0 ? { content: prose } : {},
+    sources,
+    truncated: false,
+  }
+}
+
 /** The DeepSeek-backed search provider; HTTP redirects fail as `WEB_PROVIDER_ERROR`. */
 export class DeepSeekSearchProvider implements WebSearchProvider {
   readonly id = DEEPSEEK_PROVIDER_ID
 
   /**
-   * @param resolveOptions - the options for the NEXT operation, snapshotted
-   * once at each operation's entry so one search never mixes two sections. A
-   * thunk rather than a value because the plugin's settings section can change
-   * between searches, and re-registering the provider to carry a new endpoint
-   * would make the seam's selection observable to the user as a flicker.
+   * @param resolveOptions - resolves the options for ONE operation from the
+   *   request, snapshotted once at the operation's entry so one search never
+   *   mixes two sections or backends. A thunk rather than a value because the
+   *   plugin's settings section can change between searches, and re-registering
+   *   the provider to carry a new endpoint would make the seam's selection
+   *   observable to the user as a flicker. The request lets the resolver pick
+   *   the backend (explicit `backend`, agent-default-model auto-match, or the
+   *   legacy single endpoint).
    */
-  constructor(private readonly resolveOptions: () => DeepSeekSearchProviderOptions) {}
+  constructor(private readonly resolveOptions: (request: WebSearchRequest) => DeepSeekSearchProviderOptions) {}
 
   available(): boolean {
-    const options = this.resolveOptions()
+    // Backend-resolution errors (e.g. several providers share the selected
+    // model) deliberately propagate rather than flattening to "unavailable", so
+    // the misconfiguration stays loud instead of reading as a missing provider.
+    const options = this.resolveOptions({ query: '' })
     return ((options.apiKey?.length ?? 0) > 0 || options.resolveApiKey !== undefined)
       && URL.canParse(options.baseURL)
       && isPositiveInteger(options.maxTokens)
@@ -198,8 +289,11 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
     // One snapshot for the whole operation: credential resolution awaits, and a
     // settings write landing inside that await must not send the key resolved
     // from the old section to the endpoint named by the new one.
-    const options = this.resolveOptions()
+    const options = this.resolveOptions(request)
     const apiKey = await this.apiKey(options, signal)
+    if (options.protocol === 'openai') {
+      return this.searchOpenAI(options, apiKey, request, signal)
+    }
     throwIfSearchAborted(signal)
     const endpoint = `${options.baseURL}/messages`
     const body: DeepSeekSearchLlmRequest['body'] = {
@@ -263,22 +357,80 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
       // platform whose key then lives in DEEPSEEK_API_KEY, while this provider
       // still sends it to api.deepseek.com. Say so instead of letting the model
       // retry a request no retry can fix.
-      if (status === 401 || status === 403) {
-        const ref = options.apiKeyEnv ?? 'DEEPSEEK_API_KEY'
-        throw new WebError(
-          `${message} — the "${ref}" credential was rejected by ${endpoint} (HTTP ${status}). `
-          + 'When chat\'s llm-deepseek baseURL is overridden to another platform, the shared key belongs to THAT platform, '
-          + 'not api.deepseek.com: set web-search-deepseek\'s own baseURL and apiKey for the platform that issued the key, '
-          + 'store a DeepSeek-platform key, or mount a different search provider.',
-          'WEB_PROVIDER_AUTH_FAILED',
-        )
-      }
-      throw new WebError(message, 'WEB_PROVIDER_ERROR')
+      throw classifyHttpError(status, message, endpoint, options.apiKeyEnv)
     }
 
     try {
       const payload = await response.json() as AnthropicResponse
       return mapAnthropicResponse(payload)
+    } catch (error: unknown) {
+      if (signal?.aborted === true || isAbortError(error)) throw searchAborted(signal, error)
+      if (error instanceof WebError) throw error
+      throw new WebError(`DeepSeek returned an unprocessable response body: ${String(error)}`, 'WEB_PROVIDER_ERROR', { cause: error })
+    }
+  }
+
+  /**
+   * Run one search through an OpenAI-compatible `/chat/completions` backend.
+   * The model's answer prose becomes `content`; citeable URLs come from
+   * structured `message.citations` or, when the backend allows prose fallback,
+   * markdown-link/bare-URL extraction.
+   * @param options - the snapshotted backend options.
+   * @param apiKey - the resolved credential for this operation.
+   * @param request - the caller's search request.
+   * @param signal - cancellation signal forwarded to the fetch.
+   * @returns the normalized search result.
+   */
+  private async searchOpenAI(
+    options: DeepSeekSearchProviderOptions,
+    apiKey: string,
+    request: WebSearchRequest,
+    signal?: AbortSignal,
+  ): Promise<WebSearchResult> {
+    const endpoint = `${options.baseURL.replace(/\/+$/, '')}/chat/completions`
+    const body: DeepSeekSearchOpenAiBody = {
+      model: options.model,
+      max_tokens: options.maxTokens,
+      messages: [{ role: 'user', content: `Perform a web search for the query: ${request.query}` }],
+    }
+    options.recordRequest?.({ endpoint, apiVersion: options.apiVersion, body })
+    throwIfSearchAborted(signal)
+    let response: Response
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        redirect: 'error',
+        headers: {
+          'x-api-key': apiKey,
+          'authorization': `Bearer ${apiKey}`,
+          'content-type': 'application/json',
+          'accept': 'application/json',
+          'user-agent': USER_AGENT,
+        },
+        body: JSON.stringify(body),
+        ...signal !== undefined ? { signal } : {},
+      })
+    } catch (error: unknown) {
+      if (signal?.aborted === true || isAbortError(error)) throw searchAborted(signal, error)
+      throw new WebError(`DeepSeek search request failed: ${String(error)}`, 'WEB_PROVIDER_ERROR', { cause: error })
+    }
+
+    if (!response.ok) {
+      const status = response.status
+      let message = `DeepSeek API error (HTTP ${status})`
+      try {
+        const parsed = await response.json() as OpenAiError
+        const detail = typeof parsed.error === 'string' ? parsed.error : parsed.error?.message ?? parsed.message
+        if (detail !== undefined && detail.length > 0) message = detail
+      } catch (error: unknown) {
+        if (signal?.aborted === true || isAbortError(error)) throw searchAborted(signal, error)
+      }
+      throw classifyHttpError(status, message, endpoint, options.apiKeyEnv)
+    }
+
+    try {
+      const payload = await response.json() as OpenAiResponse
+      return mapOpenAIResponse(payload, options.allowProseFallback)
     } catch (error: unknown) {
       if (signal?.aborted === true || isAbortError(error)) throw searchAborted(signal, error)
       if (error instanceof WebError) throw error
@@ -356,6 +508,37 @@ function searchAborted(signal?: AbortSignal, fallback?: unknown): WebError {
 /** True for a fetch/`AbortSignal` abort, surfaced as `WEB_ABORTED`. */
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError'
+}
+
+/**
+ * Classify a failing HTTP search response. 401/403 are a CONFIGURATION class of
+ * failure (the resolved credential does not open THIS endpoint); the common shape
+ * is chat rerouted to another platform whose key then lives in `DEEPSEEK_API_KEY`
+ * while this provider still sends it to `api.deepseek.com`. Say so instead of
+ * letting the model retry a request no retry can fix.
+ * @param status - the HTTP status.
+ * @param message - the provider's message detail (or the status line).
+ * @param endpoint - the endpoint that rejected the request, for the guidance.
+ * @param apiKeyEnv - the resolved credential reference name.
+ * @returns the WebError for the failure.
+ */
+function classifyHttpError(
+  status: number,
+  message: string,
+  endpoint: string,
+  apiKeyEnv: CredentialRef | undefined,
+): WebError {
+  if (status === 401 || status === 403) {
+    const ref = apiKeyEnv ?? 'DEEPSEEK_API_KEY'
+    return new WebError(
+      `${message} — the "${ref}" credential was rejected by ${endpoint} (HTTP ${status}). `
+      + 'When chat\'s llm-deepseek baseURL is overridden to another platform, the shared key belongs to THAT platform, '
+      + 'not api.deepseek.com: set web-search-deepseek\'s own baseURL and apiKey for the platform that issued the key, '
+      + 'store a DeepSeek-platform key, or mount a different search provider.',
+      'WEB_PROVIDER_AUTH_FAILED',
+    )
+  }
+  return new WebError(message, 'WEB_PROVIDER_ERROR')
 }
 
 /** True for DeepSeek request limits that can be sent to the Messages API. */

@@ -13,7 +13,7 @@ import {
   DEEPSEEK_PROVIDER_ID,
 } from '@deepseek-ai/dsh-web-search-deepseek'
 import * as deepseekPlugin from '@deepseek-ai/dsh-web-search-deepseek'
-import { citationSnippets, mapAnthropicResponse } from '../src/provider.ts'
+import { citationSnippets, mapAnthropicResponse, mapOpenAIResponse } from '../src/provider.ts'
 import type { AnthropicResponse } from '@deepseek-ai/dsh-web-search-deepseek/src/types.ts'
 
 /** Construct the provider over a fixed options value; production passes a live thunk. */
@@ -22,13 +22,15 @@ import type { DeepSeekSearchProviderOptions } from '@deepseek-ai/dsh-web-search-
 const searchProvider = (options: DeepSeekSearchProviderOptions): DeepSeekSearchProvider =>
   new DeepSeekSearchProvider(() => options)
 
-const options = {
+const options: DeepSeekSearchProviderOptions = {
   apiKey: 'ds-key',
   baseURL: 'https://api.deepseek.test/anthropic/v1',
   model: 'deepseek-chat',
   apiVersion: '2023-06-01',
   maxTokens: 4096,
   maxUses: 5,
+  protocol: 'anthropic',
+  allowProseFallback: false,
 }
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
@@ -144,6 +146,200 @@ describe('mapAnthropicResponse', () => {
   it('throws WEB_PROVIDER_ERROR when content is absent entirely', () => {
     expect(() => mapAnthropicResponse({}))
       .toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_ERROR' }))
+  })
+})
+
+describe('mapOpenAIResponse', () => {
+  it('maps structured message.citations directly, without prose fallback', () => {
+    const result = mapOpenAIResponse(
+      { choices: [{ message: { content: 'answer', citations: [{ url: 'https://a.test', title: 'A' }, { url: 'https://b.test' }] } }] },
+      false,
+    )
+    expect(result).toEqual({
+      content: 'answer',
+      sources: [{ url: 'https://a.test', title: 'A' }, { url: 'https://b.test' }],
+      truncated: false,
+    })
+  })
+
+  it('extracts markdown links then bare URLs from prose when fallback is enabled', () => {
+    const content = 'Found [官方](https://www.zhangxuejiche.com) and a bare https://a.test/link plain.'
+    const result = mapOpenAIResponse({ choices: [{ message: { content } }] }, true)
+    expect(result.sources).toEqual([
+      { url: 'https://www.zhangxuejiche.com', title: '官方' },
+      { url: 'https://a.test/link' },
+    ])
+    expect(result.content).toBe(content)
+  })
+
+  it('dedupes by URL, keeping the markdown-driven title for a repeated bare URL', () => {
+    const content = '[X](https://d.test) then again https://d.test'
+    const result = mapOpenAIResponse({ choices: [{ message: { content } }] }, true)
+    expect(result.sources).toEqual([{ url: 'https://d.test', title: 'X' }])
+  })
+
+  it('omits content when the model returns none', () => {
+    const result = mapOpenAIResponse({ choices: [{ message: { citations: [{ url: 'https://x.test' }] } }] }, false)
+    expect(result.content).toBeUndefined()
+    expect(result.sources).toEqual([{ url: 'https://x.test' }])
+  })
+
+  it('throws WEB_PROVIDER_ERROR in strict mode (no fallback, no citations)', () => {
+    expect(() => mapOpenAIResponse({ choices: [{ message: { content: 'just prose, no link' } }] }, false))
+      .toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_ERROR' }))
+  })
+
+  it('throws WEB_PROVIDER_ERROR when prose fallback yields no URLs', () => {
+    expect(() => mapOpenAIResponse({ choices: [{ message: { content: 'just prose, no link' } }] }, true))
+      .toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_ERROR' }))
+  })
+})
+
+describe('DeepSeekSearchProvider OpenAI dialect', () => {
+  const openaiOptions: DeepSeekSearchProviderOptions = {
+    ...options,
+    protocol: 'openai',
+    baseURL: 'https://ark.test/v3/',
+    model: 'deepseek-v4-flash',
+    allowProseFallback: true,
+  }
+
+  it('posts chat/completions with an OpenAI body and both auth headers, then parses URLs', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ choices: [{ message: { content: '[官方](https://www.zhangxuejiche.com) done' } }] }))
+    vi.stubGlobal('fetch', fetchMock)
+    const recordRequest = vi.fn()
+    const result = await searchProvider({ ...openaiOptions, recordRequest }).search({ query: 'hi' })
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('https://ark.test/v3/chat/completions')
+    const headers = init.headers as Record<string, string>
+    expect(headers['authorization']).toBe('Bearer ds-key')
+    expect(headers['x-api-key']).toBe('ds-key')
+    expect(headers['anthropic-version']).toBeUndefined()
+    const body = {
+      model: 'deepseek-v4-flash',
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: 'Perform a web search for the query: hi' }],
+    }
+    expect(JSON.parse(init.body as string)).toEqual(body)
+    expect(recordRequest).toHaveBeenCalledWith({ endpoint: url, apiVersion: '2023-06-01', body })
+    expect(result.sources).toEqual([{ url: 'https://www.zhangxuejiche.com', title: '官方' }])
+  })
+
+  it('classifies a 401 from the OpenAI endpoint as WEB_PROVIDER_AUTH_FAILED with guidance', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      jsonResponse({ error: { message: 'authentication failed' } }, { status: 401 })))
+    const error = await searchProvider(openaiOptions).search({ query: 'q' }).catch((e: unknown) => e) as WebError
+    expect(error.code).toBe('WEB_PROVIDER_AUTH_FAILED')
+    expect(error.message).toContain('the "DEEPSEEK_API_KEY" credential was rejected by https://ark.test/v3/chat/completions (HTTP 401)')
+  })
+
+  it('strict OpenAI returns WEB_PROVIDER_ERROR for a URL-less answer', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      jsonResponse({ choices: [{ message: { content: 'no links in this prose' } }] })))
+    await expect(searchProvider({ ...openaiOptions, allowProseFallback: false }).search({ query: 'q' }))
+      .rejects.toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_ERROR' }))
+  })
+
+  it('forwards cancellation onto the chat/completions fetch', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ choices: [{ message: { citations: [{ url: 'https://x.test' }] } }] }))
+    vi.stubGlobal('fetch', fetchMock)
+    const controller = new AbortController()
+    await searchProvider(openaiOptions).search({ query: 'q' }, controller.signal)
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(init.signal).toBe(controller.signal)
+  })
+})
+
+describe('DeepSeekSearchProvider backend routing (registry + request + auto-match)', () => {
+  const REGISTRY_CONFIG = {
+    protocol: 'openai',
+    allowProseFallback: false,
+    providers: {
+      zhipu: { baseURL: 'https://bigmodel.test/v4/', apiKeyEnv: 'ZAI_CODING_CN_API_KEY', model: 'glm-5.3', allowProseFallback: true },
+      ark: { baseURL: 'https://ark.test/v3/', apiKeyEnv: 'DEEPSEEK_API_KEY', model: 'deepseek-v4-flash' },
+    },
+  }
+
+  /** A plugin mount with the supplied agent model stub, dispatching to the RelayServer. */
+  async function mount(config: Record<string, unknown>, agentModel?: string) {
+    const ctx = new Context()
+    await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
+    if (agentModel !== undefined) {
+      ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'test', model: agentModel }) })
+    }
+    await ctx.plugin(deepseekPlugin, config)
+    return ctx
+  }
+
+  it('routes an explicit request.backend to that provider regardless of the selected model', async () => {
+    const prev = process.env.ZAI_CODING_CN_API_KEY
+    process.env.ZAI_CODING_CN_API_KEY = 'zai-key'
+    try {
+      const fetchMock = vi.fn(async () =>
+        jsonResponse({ choices: [{ message: { content: '[源](https://z.test) hit' } }] }))
+      vi.stubGlobal('fetch', fetchMock)
+      const ctx = await mount(REGISTRY_CONFIG, 'glm-5.3')
+      await ctx.web.search({ query: 'q', backend: 'zhipu' })
+      const url = (fetchMock.mock.calls[0] as unknown as [string])[0]
+      expect(url).toBe('https://bigmodel.test/v4/chat/completions')
+      await ctx.fiber.dispose()
+    } finally {
+      if (prev === undefined) delete process.env.ZAI_CODING_CN_API_KEY
+      else process.env.ZAI_CODING_CN_API_KEY = prev
+    }
+  })
+
+  it('auto-matches the selected agent model to a backend per search', async () => {
+    const prev = process.env.ZAI_CODING_CN_API_KEY
+    process.env.ZAI_CODING_CN_API_KEY = 'zai-key'
+    try {
+      const fetchMock = vi.fn(async () =>
+        jsonResponse({ choices: [{ message: { content: '[q](https://q.test) ok' } }] }))
+      vi.stubGlobal('fetch', fetchMock)
+      const ctx = await mount(REGISTRY_CONFIG, 'glm-5.3')
+      await ctx.web.search({ query: 'q' })
+      const url2 = (fetchMock.mock.calls[0] as unknown as [string])[0]
+      expect(url2).toBe('https://bigmodel.test/v4/chat/completions')
+      await ctx.fiber.dispose()
+    } finally {
+      if (prev === undefined) delete process.env.ZAI_CODING_CN_API_KEY
+      else process.env.ZAI_CODING_CN_API_KEY = prev
+    }
+  })
+
+  it('throws WEB_PROVIDER_AMBIGUOUS-class error when multiple backends share the selected model', async () => {
+    const config = {
+      protocol: 'openai',
+      providers: {
+        a: { baseURL: 'https://a.test', model: 'dup' },
+        b: { baseURL: 'https://b.test', model: 'dup' },
+      },
+    }
+    const fetchMock = vi.fn(async () => jsonResponse({ choices: [{ message: { citations: [{ url: 'https://x.test' }] } }] }))
+    vi.stubGlobal('fetch', fetchMock)
+    const ctx = await mount(config, 'dup')
+    await expect(ctx.web.search({ query: 'q' })).rejects.toThrow(/providers advertise model "dup"/)
+    await ctx.fiber.dispose()
+  })
+
+  it('resolves credentials per backend apiKeyEnv', async () => {
+    const prev = process.env.ZAI_CODING_CN_API_KEY
+    process.env.ZAI_CODING_CN_API_KEY = 'zai-key'
+    try {
+      const fetchMock = vi.fn(async () =>
+        jsonResponse({ choices: [{ message: { citations: [{ url: 'https://z.test' }] } }] }))
+      vi.stubGlobal('fetch', fetchMock)
+      const ctx = await mount(REGISTRY_CONFIG, 'glm-5.3')
+      await ctx.web.search({ query: 'q' })
+      const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1]
+      const headers = init.headers as Record<string, string>
+      expect(headers['x-api-key']).toBe('zai-key')
+      await ctx.fiber.dispose()
+    } finally {
+      if (prev === undefined) delete process.env.ZAI_CODING_CN_API_KEY
+      else process.env.ZAI_CODING_CN_API_KEY = prev
+    }
   })
 })
 

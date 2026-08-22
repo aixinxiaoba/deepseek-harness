@@ -25,16 +25,40 @@ It reuses the `DEEPSEEK_API_KEY` credential reference (no new secret) but **not*
 | `apiVersion` | `2023-06-01` | `anthropic-version` header value. |
 | `maxTokens` | `4096` | Positive-integer upper bound on generated tokens for the Messages request. |
 | `maxUses` | `5` | Positive-integer maximum `web_search` server-tool uses per request. |
+| `protocol` | `anthropic` | Wire dialect for the single legacy endpoint: `anthropic` (Messages `{baseURL}/messages`, `web_search_20250305`) or `openai` (`{baseURL}/chat/completions`); `openai` requires `baseURL`. Named backends in `providers` always use `openai`. |
+| `providers` | `{}` | Named OpenAI-style backends (`{ ark: {…}, zhipu: {…} }`), each `{ baseURL, apiKeyEnv?, model?, allowProseFallback? }`, routed at per-call time (see below). |
 
 ```yaml
 - id: web-search-deepseek
   name: '@deepseek-ai/dsh-web-search-deepseek'
   config:
-    apiKeyEnv: DEEPSEEK_API_KEY
-    baseURL: https://gateway.internal/anthropic/v1
+    protocol: openai
+    providers:
+      ark:
+        baseURL: https://ark.cn-beijing.volces.com/api/coding/v3
+        apiKeyEnv: DEEPSEEK_API_KEY
+        model: deepseek-v4-flash
+        allowProseFallback: true
+      zhipu:
+        baseURL: https://open.bigmodel.cn/api/coding/paas/v4
+        apiKeyEnv: ZAI_CODING_CN_API_KEY
+        model: glm-5.3
+        allowProseFallback: true
 ```
 
 The entry above is the base layer of the `web-search-deepseek` Settings section: a user layer over it reaches the NEXT search, because the provider projects the section per call rather than capturing it at registration. The seam's provider selection therefore never flickers when an endpoint or model changes. `apiKey` carries `role('secret')`, so it never rides a `describe()` response in any layer — a configuration surface learns only whether the credentials domain holds a value for the reference `apiKeyEnv` names, never whether a layer carries a literal key.
+
+## OpenAI dialect: multi-backend routing
+
+When chat is rerouted to an OpenAI-compatible gateway (Volcano Ark, Zhipu, Qwen, …) whose `DEEPSEEK_API_KEY` opens that gateway rather than `api.deepseek.com`, this provider can also speak `openai` and answer from that same gateway. Each entry in `providers` registers as a searchable backend with its own endpoint, credential reference, model, and prose-fallback policy.
+
+Backend selection is resolved per search, in priority order:
+
+1. **Explicit `backend`** — the `web_search` tool's optional `backend` argument (and `WebSearchRequest.backend`) names a configured entry; unknown names throw.
+2. **Auto-match the frontend's selected model** — when no `backend` is given, the backend whose `model` equals `ctx.agentDefaultModel.currentSelection().model` is used, so switching models in the UI switches the search backend automatically; several entries advertising the same model throw as a loud ambiguity error.
+3. **Legacy single endpoint** — the `protocol`/`baseURL`/`apiKeyEnv`/`model` config (the DeepSeek Anthropic endpoint by default).
+
+The OpenAI dialect posts `{baseURL}/chat/completions` with both `Authorization: Bearer` and `x-api-key`, and parses `choices[0].message`: structured `message.citations` map directly; otherwise, only when the backend's `allowProseFallback` is true, it extracts `[label](url)` markdown links and bare URLs from the answer's prose (deduped by URL, the markdown label becoming the title) and surfaces the answer text as `content`. With `allowProseFallback` off and no structured citations, a URL-less answer throws `WEB_PROVIDER_ERROR` — the strict posture below is preserved for the Anthropic path and remains the default.
 
 ## Mapping
 
