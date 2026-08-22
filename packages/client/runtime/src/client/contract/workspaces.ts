@@ -6,7 +6,7 @@
  * the concrete class. Widening this interface is the explicit act of
  * widening what features may do to the workspaces domain.
  */
-import type { DirectoryListing, SessionId, WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-remotes/client'
+import type { DirectoryListing, SessionId, WorkspaceFileListingView, WorkspaceId, WorkspaceTextFileView, WorkspaceView } from '@deepseek-ai/dsh-api-remotes/client'
 import type { WorkspaceListState } from '../workspaces/service.ts'
 import type { ObservableSnapshot } from './store.ts'
 
@@ -58,6 +58,32 @@ export interface IWorkspaces {
    * @param path - absolute or host-resolvable path.
    */
   openPath(path: string): Promise<void>
+  /**
+   * List one directory level of a session's workspace (files and directories,
+   * name-sorted, bounded) for the workspace files panel. The browsing root is
+   * the session's recorded project directory, resolved and enforced Host-side.
+   * @param sessionId - the session whose workspace is browsed.
+   * @param path - absolute directory to list; absent lists the workspace root.
+   * @param signal - aborts the wire request (and the Host's scan).
+   */
+  listWorkspaceFiles(sessionId: SessionId, path?: string, signal?: AbortSignal): Promise<WorkspaceFileListingView>
+  /**
+   * Read the bounded head of one text file in a session's workspace.
+   * @param sessionId - the session whose workspace is browsed.
+   * @param path - the file to read.
+   * @param signal - aborts the wire request.
+   */
+  readWorkspaceText(sessionId: SessionId, path: string, signal?: AbortSignal): Promise<WorkspaceTextFileView>
+  /**
+   * The document-relative URL of one workspace image for a native `<img src>`
+   * (served by the Host's no-envelope GET route with a private cache and
+   * ETag revalidation). `rev` is the listing's mtimeMs: a changed file gets a
+   * distinct URL, so the private cache cannot serve a stale image.
+   * @param sessionId - the session whose workspace is browsed.
+   * @param path - the image file's absolute path.
+   * @param rev - cache-bust key (the file's mtimeMs from the listing).
+   */
+  workspaceFileImageUrl(sessionId: SessionId, path: string, rev?: number | string): string
   /**
    * Rename a Workspace.
    * @param workspaceId - target workspace.

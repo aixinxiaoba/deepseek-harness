@@ -71,6 +71,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   authorization: 'credentials.md',
   credentials: 'credentials.md',
   directoryPicker: 'workspace.md',
+  workspaceFiles: 'workspace.md',
   dynamicCordisRunner: 'extensions.md',
   e2b: 'subprocess.md',
   fileReferences: 'session-reference.md',
@@ -545,6 +546,7 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
   'Promise',
   'Record',
   'Readonly',
+  'Response',
   'Uint8Array',
 ])
 
@@ -562,6 +564,8 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   BashEnvVariableInfo: 'service-local metadata type is owned by packages/shell/tool-bash/src/index.ts',
   CompactionAgentContext: 'compaction service input is owned by packages/compaction/compaction/src/index.ts',
   ManualCompactAgentContext: 'manual compaction service input is owned by packages/compaction/compaction/src/index.ts',
+  WorkspaceFileListing: 'workspace listing payload is owned by packages/host/workspace-files/src/index.ts',
+  WorkspaceTextFile: 'workspace text-read payload is owned by packages/host/workspace-files/src/index.ts',
   ClientResponse: 'wire response message is owned by packages/host/apiproxy/src/api/rpc.ts',
   ApprovalRequestId: 'dynamic Plugin approval identity is owned by packages/extensions/cordis-host-runner/src/types.ts',
   CordisErrorDetails: 'Cordis runtime error payload is owned by packages/extensions/cordis-host-runner/src/types.ts',

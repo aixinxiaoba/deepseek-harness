@@ -223,6 +223,15 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
         return { rpcId: request.rpcId, result: { ok: true, value: { skills: [{ name: 'commit-helper', description: 'Git commits', modelInvocable: true }] } } }
       },
     },
+    workspaceFiles: {
+      async list(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { path: '/t', entries: [], truncated: false } } }
+      },
+      async readText(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { path: request.payload.path, content: '', totalBytes: 0, truncated: false } } }
+      },
+      image: async () => new Response('stub', { status: 404 }),
+    },
     goals: {
       async create(request) {
         return { rpcId: request.rpcId, result: { ok: false, error: { code: 'internal', message: 'stub', details: {} } } }

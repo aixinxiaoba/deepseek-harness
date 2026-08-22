@@ -1,0 +1,253 @@
+/* Workspace files panel: sidebar entry button + overlay drawer. Colors ride
+   the shell's css variables (var(--*)) so light/dark themes both hold. */
+
+/* ---- Sidebar footer entry ---- */
+
+.entryButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary, inherit);
+  font: inherit;
+  cursor: pointer;
+}
+
+.entryButton:hover {
+  background: var(--hover-bg, rgba(127, 127, 127, 0.12));
+}
+
+.entryActive {
+  background: var(--active-bg, rgba(127, 127, 127, 0.18));
+}
+
+.entryLabel {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Drawer shell ---- */
+
+.drawerRoot {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  /* The overlay layer is click-through; the drawer opts back in. */
+  pointer-events: none;
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  background: var(--scrim, rgba(0, 0, 0, 0.24));
+}
+
+.drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(560px, 88vw);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  background: var(--panel-bg, #fff);
+  color: var(--text-primary, inherit);
+  border-left: 1px solid var(--border, rgba(127, 127, 127, 0.3));
+  box-shadow: -8px 0 24px var(--shadow, rgba(0, 0, 0, 0.18));
+}
+
+.drawerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border, rgba(127, 127, 127, 0.2));
+  flex: none;
+}
+
+.drawerTitle {
+  font-weight: 600;
+}
+
+.drawerClose {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.drawerClose:hover {
+  background: var(--hover-bg, rgba(127, 127, 127, 0.12));
+}
+
+.drawerBody {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+/* ---- Tree ---- */
+
+.tree {
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  width: 46%;
+  border-right: 1px solid var(--border, rgba(127, 127, 127, 0.2));
+}
+
+.treeToolbar {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  flex: none;
+}
+
+.hiddenToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary, inherit);
+  cursor: pointer;
+}
+
+.treeBody {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 6px 12px;
+}
+
+.treeRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 26px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.treeRow:hover {
+  background: var(--hover-bg, rgba(127, 127, 127, 0.1));
+}
+
+.rowSelected {
+  background: var(--active-bg, rgba(127, 127, 127, 0.16));
+}
+
+.rowName {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rowDir {
+  font-weight: 500;
+}
+
+.rowMeta {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-secondary, inherit);
+  opacity: 0.8;
+}
+
+.chevron {
+  flex: none;
+  width: 14px;
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.chevronSpacer {
+  flex: none;
+  width: 14px;
+}
+
+.treeNotice {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-secondary, inherit);
+}
+
+/* ---- Preview ---- */
+
+.preview {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  padding: 10px 12px;
+}
+
+.previewNotice {
+  padding: 8px 0;
+  font-size: 12px;
+  color: var(--text-secondary, inherit);
+}
+
+.previewImageWrap {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.previewImage {
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  cursor: zoom-in;
+  border-radius: 4px;
+}
+
+.previewRead {
+  min-width: 0;
+}
+
+/* ---- Image zoom overlay ---- */
+
+.zoomRoot {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--scrim, rgba(0, 0, 0, 0.6));
+  cursor: zoom-out;
+}
+
+.zoomImage {
+  max-width: 92vw;
+  max-height: 92vh;
+  object-fit: contain;
+  border-radius: 4px;
+}

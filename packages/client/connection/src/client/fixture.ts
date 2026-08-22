@@ -2883,6 +2883,21 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         })
       },
     },
+
+    workspaceFiles: {
+      list: (request) => {
+        const missing = requireSession(request)
+        if (missing !== undefined) return missing
+        return ok(request, { path: '/fixture/workspace', entries: [], truncated: false })
+      },
+      readText: (request) => {
+        const missing = requireSession(request)
+        if (missing !== undefined) return missing
+        return ok(request, { path: request.payload.path, content: 'fixture 模式不读取工作空间文件', totalBytes: 0, truncated: false })
+      },
+      // The image surface rides a GET route the fixture server does not mount.
+      image: () => Promise.resolve(new Response('fixture mode does not serve workspace files', { status: 404 })),
+    },
     goals: {
       // Compatibility face only: old API Proxy payloads and acknowledgements
       // adapt to the canonical fixture Remote implementation above.
@@ -3204,6 +3219,8 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'workspace.insertSessionBefore': return this.api.workspace.insertSessionBefore(request)
       case 'workspace.archiveSession': return this.api.workspace.archiveSession(request)
       case 'skill.list': return this.api.skills.list(request)
+      case 'workspaceFiles.list': return this.api.workspaceFiles.list(request, signal)
+      case 'workspaceFiles.readText': return this.api.workspaceFiles.readText(request, signal)
       case 'agentPreset.list': return this.api.agentPresets.list(request)
       case 'agentPreset.select': return this.api.agentPresets.select(request)
       case 'agentPreset.read': return this.api.agentPresets.read(request)

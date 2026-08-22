@@ -45,6 +45,20 @@ export interface RpcErrorDetailsMap {
   'directory-exists': { path: string }
   'directory-create-failed': { path: string }
   'directory-picker-unavailable': { capability: string }
+  /**
+   * The workspace-files panel was refused a target: the candidate path was not
+   * fully qualified or canonicalized outside the session's workspace root (the
+   * files domain confines every read beneath the session cwd).
+   */
+  'workspace-files-denied': { path: string }
+  /** The workspace-files panel addressed a missing file/directory or a non-previewable target. */
+  'workspace-files-not-found': { path: string }
+  /** The workspace-files panel read a file the binary rejection refused (NUL byte). */
+  'workspace-files-not-text': { path: string }
+  /** The workspace-files panel addressed an image beyond the serving cap. */
+  'workspace-files-too-large': { path: string }
+  /** The workspace-files panel hit a filesystem failure reading its target. */
+  'workspace-files-unreadable': { path: string }
   'agent-preset-read-only': { agentPreset: string; reason: string }
   'agent-preset-locked': { sessionId: SessionId; agentPreset: string }
   'agent-preset-conflict': { sessionId: SessionId; requestedPreset: string; existingPreset?: string }

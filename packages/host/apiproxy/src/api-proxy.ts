@@ -27,6 +27,7 @@ import { SessionQueryError, type SessionSearchCursor } from '@deepseek-ai/dsh-se
 import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import type { SubagentListEntry as CatalogSubagentListEntry } from '@deepseek-ai/dsh-subagent'
 import { isUserInvocable } from '@deepseek-ai/dsh-skill'
+import { WorkspaceFilesError } from '@deepseek-ai/dsh-host-workspace-files'
 import type { Workspace, WorkspaceRecord } from '@deepseek-ai/dsh-workspace'
 import {
   workspaceDomainState, workspaceRecord, WorkspaceId as brandWorkspaceId,
@@ -1046,6 +1047,35 @@ function changedWorkspaceView(workspaceId: string, value: unknown): WorkspaceVie
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   }
+}
+
+/**
+ * Project a workspace-files service failure onto the wire error vocabulary:
+ * the closed `workspace-files-*` codes carry the offending path; an unknown
+ * session reuses `session-not-found`; a cwd-less session is a host-side
+ * integrity problem (the skills domain maps it the same way), so `internal`.
+ * @param sessionId - the session the failed call addressed.
+ * @param error - the thrown value (WorkspaceFilesError expected).
+ * @returns the RpcError for the err() envelope.
+ */
+function workspaceFilesRpcError(sessionId: SessionId, error: unknown): RpcError {
+  if (error instanceof WorkspaceFilesError) {
+    switch (error.code) {
+      case 'workspace-session-not-found':
+        return { code: 'session-not-found', message: `session "${sessionId}" not found (not attached)`, details: { sessionId } }
+      case 'workspace-denied':
+        return { code: 'workspace-files-denied', message: 'path is outside the session workspace', details: { path: error.path } }
+      case 'workspace-not-found':
+        return { code: 'workspace-files-not-found', message: 'workspace target not found', details: { path: error.path } }
+      case 'workspace-not-text':
+        return { code: 'workspace-files-not-text', message: 'file is not text', details: { path: error.path } }
+      case 'workspace-too-large':
+        return { code: 'workspace-files-too-large', message: 'file exceeds the preview cap', details: { path: error.path } }
+      case 'workspace-unreadable':
+        return { code: 'workspace-files-unreadable', message: 'workspace target is unreadable', details: { path: error.path } }
+    }
+  }
+  return { code: 'internal', message: `workspace files failure: ${String(error)}`, details: {} }
 }
 
 /**
@@ -3183,6 +3213,41 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           })
         } catch (error: unknown) {
           return err(request, { code: 'internal', message: `skill listing failed: ${String(error)}`, details: {} })
+        }
+      },
+    },
+
+    workspaceFiles: {
+      async list(request, signal) {
+        try {
+          return ok(request, await ctx.workspaceFiles.list(request.payload.sessionId, request.payload.path, signal))
+        } catch (error: unknown) {
+          return err(request, workspaceFilesRpcError(request.payload.sessionId, error))
+        }
+      },
+      async readText(request, signal) {
+        try {
+          return ok(request, await ctx.workspaceFiles.readText(request.payload.sessionId, request.payload.path, signal))
+        } catch (error: unknown) {
+          return err(request, workspaceFilesRpcError(request.payload.sessionId, error))
+        }
+      },
+      async image(request, signal, etag) {
+        // Carrier-only surface (the GET route answers it): fetch-level
+        // statuses instead of the wire envelope. Messages stay generic — the
+        // service's own text carries absolute host paths into no error bar.
+        try {
+          return await ctx.workspaceFiles.image(request.sessionId, request.path, signal, etag)
+        } catch (error: unknown) {
+          if (error instanceof WorkspaceFilesError) {
+            const status = error.code === 'workspace-denied' ? 403
+              : error.code === 'workspace-too-large' ? 413
+                : error.code === 'workspace-not-text' ? 415
+                  : error.code === 'workspace-unreadable' ? 500
+                    : 404
+            return new Response(`workspace file unavailable (${error.code})`, { status })
+          }
+          return new Response('workspace file unavailable', { status: 500 })
         }
       },
     },

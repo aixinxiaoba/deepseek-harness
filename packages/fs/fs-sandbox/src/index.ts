@@ -49,6 +49,14 @@ import { isPathUnder } from './containment.ts'
 export type Config = LocalConfig
 
 /**
+ * Canonical-path containment test (lexical fast path plus filesystem-identity
+ * walk for alias-equivalent spellings). Re-exported for host services that
+ * confine a browsing surface to one root — the workspace-files service applies
+ * it per request beneath a session's canonical workspace root.
+ */
+export { isPathUnder } from './containment.ts'
+
+/**
  * Sandbox-enforcing filesystem backend. Registers as `ctx.fs` (loading it
  * INSTEAD OF `dsh-fs-local`, together with a `ctx.sandboxPolicy`, is the whole
  * swap — the model-facing tools are untouched). Its configured default mode is

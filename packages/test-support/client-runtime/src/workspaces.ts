@@ -1,7 +1,8 @@
 /** Test-owned workspaces face: the renderer standard-kit observable plus recorded actions. */
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
-  DirectoryListing, IWorkspaces, SessionId, SnapshotStore, WorkspaceId, WorkspaceListState, WorkspaceView,
+  DirectoryListing, IWorkspaces, SessionId, SnapshotStore, WorkspaceFileListingView,
+  WorkspaceId, WorkspaceListState, WorkspaceTextFileView, WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import { workspaceListState } from './fixtures.ts'
 import type { Stabilizer } from './fixtures.ts'
@@ -95,6 +96,49 @@ export class TestWorkspaces implements IWorkspaces {
   async openPath(path: string): Promise<void> {
     this.calls.push({ method: 'openPath', args: [path] })
     await (this.stubs.get('openPath')?.(path) as Promise<void> | undefined)
+  }
+
+  /**
+   * Workspace-files listing (recorded). The default resolves an empty level;
+   * stub for richer trees.
+   * @param sessionId - the session whose workspace is browsed.
+   * @param path - directory to list; absent lists the workspace root.
+   * @param signal - caller lifetime.
+   */
+  async listWorkspaceFiles(sessionId: SessionId, path?: string, signal?: AbortSignal): Promise<WorkspaceFileListingView> {
+    this.calls.push({ method: 'listWorkspaceFiles', args: [sessionId, path] })
+    void signal
+    const stub = this.stubs.get('listWorkspaceFiles')
+    if (stub !== undefined) return await (stub(sessionId, path) as Promise<WorkspaceFileListingView>)
+    return { path: path ?? '/fixture/workspace', entries: [], truncated: false }
+  }
+
+  /**
+   * Workspace-files text read (recorded). The default resolves an empty file;
+   * stub for content.
+   * @param sessionId - the session whose workspace is browsed.
+   * @param path - the file to read.
+   * @param signal - caller lifetime.
+   */
+  async readWorkspaceText(sessionId: SessionId, path: string, signal?: AbortSignal): Promise<WorkspaceTextFileView> {
+    this.calls.push({ method: 'readWorkspaceText', args: [sessionId, path] })
+    void signal
+    const stub = this.stubs.get('readWorkspaceText')
+    if (stub !== undefined) return await (stub(sessionId, path) as Promise<WorkspaceTextFileView>)
+    return { path, content: '', totalBytes: 0, truncated: false }
+  }
+
+  /**
+   * Workspace-files image URL (recorded call; pure computation).
+   * @param sessionId - the session whose workspace is browsed.
+   * @param path - the image file's absolute path.
+   * @param rev - cache-bust key.
+   */
+  workspaceFileImageUrl(sessionId: SessionId, path: string, rev?: number | string): string {
+    this.calls.push({ method: 'workspaceFileImageUrl', args: [sessionId, path, rev] })
+    const params = new URLSearchParams({ sessionId, path })
+    if (rev !== undefined) params.set('rev', String(rev))
+    return `/api/workspace.file?${params.toString()}`
   }
 
   /**

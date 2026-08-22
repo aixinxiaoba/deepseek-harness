@@ -14,6 +14,7 @@ import type { SettingsApi } from './settings.ts'
 import type { CredentialsApi } from './credentials.ts'
 import type { LlmApi } from './llm.ts'
 import type { SubagentsApi } from './subagents.ts'
+import type { WorkspaceFilesApi } from './workspace-files.ts'
 import type { RpcResponse } from './rpc.ts'
 
 /**
@@ -51,6 +52,8 @@ export interface RpcMethodMap {
   'workspace.insertSessionBefore': WorkspaceApi['insertSessionBefore']
   'workspace.archiveSession': WorkspaceApi['archiveSession']
   'skill.list': SkillsApi['list']
+  'workspaceFiles.list': WorkspaceFilesApi['list']
+  'workspaceFiles.readText': WorkspaceFilesApi['readText']
   'agentPreset.list': AgentPresetsApi['list']
   'agentPreset.select': AgentPresetsApi['select']
   'agentPreset.read': AgentPresetsApi['read']

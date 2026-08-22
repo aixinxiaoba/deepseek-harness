@@ -90,6 +90,11 @@ function scriptedApi(overrides: {
       archiveSession: r => ok(r, { archivedSessionIds: [r.payload.sessionId] }),
     },
     skills: { list: r => ok(r, { skills: [] }), ...overrides.skills },
+    workspaceFiles: {
+      list: r => ok(r, { path: '/t', entries: [], truncated: false }),
+      readText: r => ok(r, { path: r.payload.path, content: '', totalBytes: 0, truncated: false }),
+      image: async () => new Response('stub', { status: 404 }),
+    },
     agentPresets: {
       list: r => ok(r, { presets: [], authorable: false, hasDocument: false }),
       select: r => ok(r, { agentPreset: r.payload.agentPreset }),

@@ -149,6 +149,52 @@ abstract capability(): DirectoryPickerCapability
 
 Source: [`packages/host/directory-picker/src/index.ts`](../../packages/host/directory-picker/src/index.ts)
 
+<a id="ctxworkspacefiles--workspacefiles"></a>
+
+### `ctx.workspaceFiles` — `WorkspaceFiles`
+
+The `ctx.workspaceFiles` service. Stateless per call: every method resolves the session's canonical workspace root, confines the target beneath it, and performs one bounded filesystem round trip.
+
+```ts cordis-catalog
+/**
+ * List one directory level of a session's workspace.
+ * @param sessionId - the session whose workspace is browsed.
+ * @param path - directory to list; absent lists the workspace root.
+ * @param signal - caller lifetime; abort stops the scan.
+ * @returns the level's entries, name-sorted, bounded with a truncation flag.
+ */
+async list(sessionId: SessionId, path?: string, signal?: AbortSignal): Promise<WorkspaceFileListing>
+
+/**
+ * Read the bounded head of one text file in the session workspace. A NUL
+ * byte in the read window marks the file binary (the readWholeText rule);
+ * longer-than-cap files return their head with `truncated`.
+ * @param sessionId - the session whose workspace is browsed.
+ * @param path - the file to read.
+ * @param signal - caller lifetime.
+ * @returns the decoded head, the full size, and the truncation flag.
+ */
+async readText(sessionId: SessionId, path: string, signal?: AbortSignal): Promise<WorkspaceTextFile>
+
+/**
+ * Serve one image file of the session workspace as a fetch `Response`. The
+ * extension allowlist fixes the content type (bytes are never sniffed), the
+ * stat size must fit the cap before any byte is read, and the response
+ * carries an ETag (mtime+size) with `If-None-Match` honored as 304 — so a
+ * reopened preview revalidates instead of re-downloading.
+ * @param sessionId - the session whose workspace is browsed.
+ * @param path - the image file to serve.
+ * @param signal - caller lifetime.
+ * @param etag - the request's `If-None-Match` value; a match yields a 304.
+ * @returns the fetch response (200/304; 413-shaped failures throw {@link WorkspaceFilesError}).
+ */
+async image(sessionId: SessionId, path: string, signal?: AbortSignal, etag?: string): Promise<Response>
+```
+
+Types: [SessionId](core.zh.md)
+
+Source: [`packages/host/workspace-files/src/index.ts`](../../packages/host/workspace-files/src/index.ts)
+
 <a id="ctxworkspaceregistry--workspaceregistry"></a>
 
 ### `ctx.workspaceRegistry` — `WorkspaceRegistry`

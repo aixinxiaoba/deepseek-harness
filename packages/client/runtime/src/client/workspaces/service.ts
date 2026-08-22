@@ -3,7 +3,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {
   DirectoryListing, IApiClient, RpcError,
-  SessionId, WorkspaceId, WorkspaceView,
+  SessionId, WorkspaceFileListingView, WorkspaceId, WorkspaceTextFileView, WorkspaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SnapshotStore } from '../contract/store.ts'
 import { createSnapshotStore } from '../contract/store.ts'
@@ -44,6 +44,14 @@ export class DirectoryBrowseError extends Error {
   constructor(readonly rpcError: RpcError) {
     super(`directory browse failed: ${rpcError.code}: ${rpcError.message}`)
     this.name = 'DirectoryBrowseError'
+  }
+}
+
+/** Structured workspace-files failure so the files panel can branch on Host business codes. */
+export class WorkspaceFilesBrowseError extends Error {
+  constructor(readonly rpcError: RpcError) {
+    super(`workspace files failed: ${rpcError.code}: ${rpcError.message}`)
+    this.name = 'WorkspaceFilesBrowseError'
   }
 }
 
@@ -255,6 +263,46 @@ export class WorkspaceRuntime implements IWorkspaces {
     if (!response.result.ok) {
       throw new Error(`path open failed: ${response.result.error.message}`)
     }
+  }
+
+  /**
+   * List one directory level of a session's workspace for the files panel.
+   * @param sessionId - the session whose workspace is browsed.
+   * @param path - absolute directory to list; absent lists the workspace root.
+   * @param signal - aborts the wire request (and the Host's scan).
+   */
+  async listWorkspaceFiles(sessionId: SessionId, path?: string, signal?: AbortSignal): Promise<WorkspaceFileListingView> {
+    const response = await this.api.workspaceFiles.list(
+      { sessionId, ...path !== undefined ? { path } : {} },
+      signal,
+    )
+    if (!response.result.ok) throw new WorkspaceFilesBrowseError(response.result.error)
+    return response.result.value
+  }
+
+  /**
+   * Read the bounded head of one text file in a session's workspace.
+   * @param sessionId - the session whose workspace is browsed.
+   * @param path - the file to read.
+   * @param signal - aborts the wire request.
+   */
+  async readWorkspaceText(sessionId: SessionId, path: string, signal?: AbortSignal): Promise<WorkspaceTextFileView> {
+    const response = await this.api.workspaceFiles.readText({ sessionId, path }, signal)
+    if (!response.result.ok) throw new WorkspaceFilesBrowseError(response.result.error)
+    return response.result.value
+  }
+
+  /**
+   * The document-relative image URL (the no-envelope GET route carries the
+   * bytes; the private cache plus the rev key keep it fresh).
+   * @param sessionId - the session whose workspace is browsed.
+   * @param path - the image file's absolute path.
+   * @param rev - cache-bust key (the file's mtimeMs from the listing).
+   */
+  workspaceFileImageUrl(sessionId: SessionId, path: string, rev?: number | string): string {
+    const params = new URLSearchParams({ sessionId, path })
+    if (rev !== undefined) params.set('rev', String(rev))
+    return `/api/workspace.file?${params.toString()}`
   }
 
   /**

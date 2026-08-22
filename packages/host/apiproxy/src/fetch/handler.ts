@@ -45,6 +45,11 @@ import {
 } from '../api/workspace.schema.ts'
 import { skillListRequestSchema } from '../api/skills.schema.ts'
 import {
+  workspaceFileQuerySchema,
+  workspaceFilesListRequestSchema,
+  workspaceFilesReadTextRequestSchema,
+} from '../api/workspace-files.schema.ts'
+import {
   agentPresetCopyRequestSchema, agentPresetListRequestSchema, agentPresetOpenDocumentRequestSchema,
   agentPresetReadRequestSchema, agentPresetRemoveRequestSchema, agentPresetSelectRequestSchema,
 } from '../api/agent-presets.schema.ts'
@@ -117,6 +122,8 @@ const UNARY_ROUTES: UnaryRoutes = {
   'workspace.insertSessionBefore': { schema: workspaceInsertSessionBeforeRequestSchema, invoke: (api, r) => api.workspace.insertSessionBefore(r) },
   'workspace.archiveSession': { schema: workspaceArchiveSessionRequestSchema, invoke: (api, r) => api.workspace.archiveSession(r) },
   'skill.list': { schema: skillListRequestSchema, invoke: (api, r) => api.skills.list(r) },
+  'workspaceFiles.list': { schema: workspaceFilesListRequestSchema, invoke: (api, r, signal) => api.workspaceFiles.list(r, signal) },
+  'workspaceFiles.readText': { schema: workspaceFilesReadTextRequestSchema, invoke: (api, r, signal) => api.workspaceFiles.readText(r, signal) },
   'agentPreset.list': { schema: agentPresetListRequestSchema, invoke: (api, r) => api.agentPresets.list(r) },
   'agentPreset.select': { schema: agentPresetSelectRequestSchema, invoke: (api, r) => api.agentPresets.select(r) },
   'agentPreset.read': { schema: agentPresetReadRequestSchema, invoke: (api, r) => api.agentPresets.read(r) },
@@ -265,6 +272,24 @@ export function toFetchHandler(api: ApiProxy): { fetch: typeof fetch } {
           return new Response('missing or invalid sessionId query parameter', { status: 400 })
         }
         const response = await api.downloads.sessionLog(parsed.data, req.signal)
+        if (req.method === 'GET') return response
+        await response.body?.cancel()
+        return new Response(null, { status: response.status, headers: response.headers })
+      }
+      if (path === '/api/workspace.file' && (req.method === 'GET' || req.method === 'HEAD')) {
+        // Same boundary rule as session.export: brands cast only through the
+        // domain schema, and the request's If-None-Match rides the header the
+        // service already understands. Plain-HTTP image reads carry no Origin
+        // by design; the carrier's prefix-wide trust fence covers this route.
+        const parsed = workspaceFileQuerySchema.safeParse(Object.fromEntries(url.searchParams))
+        if (!parsed.success) {
+          return new Response('missing or invalid sessionId/path query parameters', { status: 400 })
+        }
+        const response = await api.workspaceFiles.image(
+          { sessionId: parsed.data.sessionId, path: parsed.data.path, ...parsed.data.rev !== undefined ? { rev: parsed.data.rev } : {} },
+          req.signal,
+          req.headers.get('if-none-match') ?? undefined,
+        )
         if (req.method === 'GET') return response
         await response.body?.cancel()
         return new Response(null, { status: response.status, headers: response.headers })

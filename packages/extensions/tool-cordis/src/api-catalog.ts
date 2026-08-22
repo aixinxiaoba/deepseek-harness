@@ -2312,6 +2312,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'workspaceFiles',
+    summary: 'The `ctx.workspaceFiles` service.',
+    description: 'The `ctx.workspaceFiles` service. Stateless per call: every method resolves the session\'s canonical workspace root, confines the target beneath it, and performs one bounded filesystem round trip.',
+    methods: [
+      {
+        signature: 'async list(sessionId: SessionId, path?: string, signal?: AbortSignal): Promise<WorkspaceFileListing>',
+        description: 'List one directory level of a session\'s workspace.',
+        parameters: [{ name: 'sessionId', description: 'the session whose workspace is browsed.' }, { name: 'path', description: 'directory to list; absent lists the workspace root.' }, { name: 'signal', description: 'caller lifetime; abort stops the scan.' }],
+        returns: 'the level\'s entries, name-sorted, bounded with a truncation flag.',
+      },
+      {
+        signature: 'async readText(sessionId: SessionId, path: string, signal?: AbortSignal): Promise<WorkspaceTextFile>',
+        description: 'Read the bounded head of one text file in the session workspace. A NUL byte in the read window marks the file binary (the readWholeText rule); longer-than-cap files return their head with `truncated`.',
+        parameters: [{ name: 'sessionId', description: 'the session whose workspace is browsed.' }, { name: 'path', description: 'the file to read.' }, { name: 'signal', description: 'caller lifetime.' }],
+        returns: 'the decoded head, the full size, and the truncation flag.',
+      },
+      {
+        signature: 'async image(sessionId: SessionId, path: string, signal?: AbortSignal, etag?: string): Promise<Response>',
+        description: 'Serve one image file of the session workspace as a fetch `Response`. The extension allowlist fixes the content type (bytes are never sniffed), the stat size must fit the cap before any byte is read, and the response carries an ETag (mtime+size) with `If-None-Match` honored as 304 — so a reopened preview revalidates instead of re-downloading.',
+        parameters: [{ name: 'sessionId', description: 'the session whose workspace is browsed.' }, { name: 'path', description: 'the image file to serve.' }, { name: 'signal', description: 'caller lifetime.' }, { name: 'etag', description: 'the request\'s `If-None-Match` value; a match yields a 304.' }],
+        returns: 'the fetch response (200/304; 413-shaped failures throw {@link WorkspaceFilesError}).',
+      },
+    ],
+  },
+  {
     key: 'workspaceRegistry',
     summary: 'Durable workspace registry.',
     description: 'Durable workspace registry. Startup waits for `sessionPersistence`, builds one canonical-cwd header index, and completes the one-time history bootstrap before the service becomes active. The persistence dependency is mandatory so an unavailable peer can never be mistaken for an empty history and commit the initialized marker.',
@@ -3962,7 +3987,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RpcErrorDetailsMap',
-    declaration: 'export interface RpcErrorDetailsMap {\n    \'bad-request\': {\n        issues: ZodIssue[];\n    };\n    \'cancelled\': {};\n    \'session-not-found\': {\n        sessionId: SessionId;\n    };\n    \'model-unavailable\': {\n        provider: string;\n        model: string;\n    };\n    \'session-conflict\': {\n        sessionId: SessionId;\n        requestedCwd: string;\n        existingCwd?: string;\n    };\n    \'invalid-time-zone\': {\n        value: string;\n    };\n    \'workspace-attach-failed\': {\n        sessionId: SessionId;\n        workspaceId: string;\n    };\n    \'workspace-not-found\': {\n        workspaceId: string;\n    };\n    \'workspace-invalid-path\': {\n        path: string;\n    };\n    \'workspace-name-conflict\': {\n        name: string;\n    };\n    \'workspace-move-invalid\': {\n        workspaceId: string;\n        sessionId: SessionId;\n        beforeSessionId?: SessionId;\n    };\n    \'directory-unreadable\': {\n        path: string;\n    };\n    \'directory-exists\': {\n        path: string;\n    };\n    \'directory-create-failed\': {\n        path: string;\n    };\n    \'directory-picker-unavailable\': {\n        capability: string;\n    };\n    \'agent-preset-read-only\': {\n        agentPreset: string;\n        reason: string;\n    };\n    \'agent-preset-locked\': {\n        sessionId: SessionId;\n        agentPreset: string;\n    };\n    \'agent-preset-conflict\': {\n        sessionId: SessionId;\n        requestedPreset: string;\n        existingPreset?: string;\n    };\n    \'agent-preset-not-found\': {\n        agentPreset: string;\n      /* …truncated — full shape in source */',
+    declaration: 'export interface RpcErrorDetailsMap {\n    \'bad-request\': {\n        issues: ZodIssue[];\n    };\n    \'cancelled\': {};\n    \'session-not-found\': {\n        sessionId: SessionId;\n    };\n    \'model-unavailable\': {\n        provider: string;\n        model: string;\n    };\n    \'session-conflict\': {\n        sessionId: SessionId;\n        requestedCwd: string;\n        existingCwd?: string;\n    };\n    \'invalid-time-zone\': {\n        value: string;\n    };\n    \'workspace-attach-failed\': {\n        sessionId: SessionId;\n        workspaceId: string;\n    };\n    \'workspace-not-found\': {\n        workspaceId: string;\n    };\n    \'workspace-invalid-path\': {\n        path: string;\n    };\n    \'workspace-name-conflict\': {\n        name: string;\n    };\n    \'workspace-move-invalid\': {\n        workspaceId: string;\n        sessionId: SessionId;\n        beforeSessionId?: SessionId;\n    };\n    \'directory-unreadable\': {\n        path: string;\n    };\n    \'directory-exists\': {\n        path: string;\n    };\n    \'directory-create-failed\': {\n        path: string;\n    };\n    \'directory-picker-unavailable\': {\n        capability: string;\n    };\n    \'workspace-files-denied\': {\n        path: string;\n    };\n    \'workspace-files-not-found\': {\n        path: string;\n    };\n    \'workspace-files-not-text\': {\n        path: string;\n    };\n    \'workspace-files-too-large\': {\n        path: string;\n    };\n    \'workspace-files-unreadable\': {\n        path: string;\n    };\n    \'agent-preset-read-only\': {\n        agentPreset: string;\n        r /* …truncated — full shape in source */',
   },
   {
     name: 'RpcId',
@@ -4966,7 +4991,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebSearchRequest',
-    declaration: 'export interface WebSearchRequest {\n    readonly query: string;\n    readonly maxResults?: number;\n}',
+    declaration: 'export interface WebSearchRequest {\n    readonly query: string;\n    readonly maxResults?: number;\n    readonly backend?: string;\n}',
   },
   {
     name: 'WebSearchResult',
@@ -5035,6 +5060,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkflowStopReason',
     declaration: 'export type WorkflowStopReason = \'completed\' | \'cancelled\' | \'error\';',
+  },
+  {
+    name: 'WorkspaceFileListing',
+    declaration: 'export interface WorkspaceFileListing {\n    path: string;\n    entries: WorkspaceFilesEntry[];\n    truncated: boolean;\n}',
+  },
+  {
+    name: 'WorkspaceFilesEntry',
+    declaration: 'export interface WorkspaceFilesEntry {\n    name: string;\n    path: string;\n    kind: \'directory\' | \'file\' | \'other\';\n    hidden: boolean;\n    size?: number;\n    mtimeMs?: number;\n}',
+  },
+  {
+    name: 'WorkspaceTextFile',
+    declaration: 'export interface WorkspaceTextFile {\n    path: string;\n    content: string;\n    totalBytes: number;\n    truncated: boolean;\n}',
   },
 ]
 

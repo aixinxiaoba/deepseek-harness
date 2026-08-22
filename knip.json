@@ -19,6 +19,7 @@
   ],
   "ignoreDependencies": [
     "@yarnpkg/cli-dist",
+    "@resvg/resvg-js",
     "lightningcss"
   ],
   "workspaces": {
@@ -142,6 +143,16 @@
     "packages/client/ui-directory-picker-browse": {
       "entry": [
         "tests/**/*.spec.tsx"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "tests/**/*.tsx"
+      ]
+    },
+    "packages/client/ui-workspace-files": {
+      "entry": [
+        "tests/**/*.client.spec.tsx"
       ],
       "project": [
         "src/**/*.ts",

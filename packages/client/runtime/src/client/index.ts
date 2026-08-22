@@ -45,7 +45,7 @@ export { SessionProvideChannel } from './sessions/provide.ts'
 export type { SessionProvideChannelHost } from './sessions/provide.ts'
 export { createScope } from './agents/scope.ts'
 export type { AgentScopeHandle } from './agents/scope.ts'
-export { DirectoryBrowseError, WorkspaceCreateError, WorkspaceRuntime } from './workspaces/service.ts'
+export { DirectoryBrowseError, WorkspaceCreateError, WorkspaceFilesBrowseError, WorkspaceRuntime } from './workspaces/service.ts'
 export { abbreviateHomePath, resolveWorkspacePath } from './workspaces/path.ts'
 // Contract only: the scope implementation and its Host transport belong to
 // dsh-client-ui-settings (see that package's settings-scope.ts).
@@ -64,7 +64,8 @@ export type { SubagentAddress, JobView } from '@deepseek-ai/dsh-client-connectio
 export type { WorkspaceListPhase } from './workspaces/manager.ts'
 export type { WorkspaceListState } from './workspaces/service.ts'
 export type {
-  DirectoryEntry, DirectoryListing, WorkspaceId, WorkspaceView,
+  DirectoryEntry, DirectoryListing, WorkspaceFileEntryView, WorkspaceFileListingView, WorkspaceTextFileView,
+  WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-client-connection/client'
 // Runtime owns the snapshot store; ui-renderer only binds it to React.
 export { createSnapshotStore, defineStore, shallowEqual } from './contract/store.ts'

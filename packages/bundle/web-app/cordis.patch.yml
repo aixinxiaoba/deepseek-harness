@@ -96,6 +96,11 @@
     - id: directory-picker
       name: '@deepseek-ai/dsh-host-directory-picker-auto'
 
+    # Confined workspace browsing service behind the files panel: listing,
+    # bounded text reads, and capped image serving for the session's cwd.
+    - id: workspace-files
+      name: '@deepseek-ai/dsh-host-workspace-files'
+
     # Read-only projection of current Loader entries for trusted client RPCs.
     - id: plugin-inventory
       name: '@deepseek-ai/dsh-host-plugin-inventory'
@@ -236,6 +241,11 @@
 
     - id: ui-workspace
       name: '@deepseek-ai/dsh-client-ui-workspace'
+
+    # The workspace files panel: sidebar footer action + overlay drawer over
+    # the workspace-files service (tree, text/image preview).
+    - id: ui-workspace-files
+      name: '@deepseek-ai/dsh-client-ui-workspace-files'
 
     # Input triggers: the '/' | '@' pipeline (ui-input-trigger), the command surface over
     # it (ui-commands), and the reference sources (ui-skill / ui-reference).

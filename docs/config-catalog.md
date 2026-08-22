@@ -791,7 +791,7 @@ Source: [`packages/hooks/hooks-codex/src/index.ts:44`](../packages/hooks/hooks-c
 
 ## `@deepseek-ai/dsh-host-apiproxy`
 
-Requires: `agentDefaultModel` · `agents` · `attachments` · `directoryPicker` · `llm` · `sessions` · `subagents` · `sessionQuery` · `tools` · `userQuestions` · `workspaceRegistry`
+Requires: `agentDefaultModel` · `agents` · `attachments` · `directoryPicker` · `llm` · `sessions` · `subagents` · `sessionQuery` · `tools` · `userQuestions` · `workspaceFiles` · `workspaceRegistry`
 
 ```ts config-catalog
 /** Gateway plugin configuration. */
@@ -866,6 +866,26 @@ export interface Config {
 ```
 
 Source: [`packages/host/webserver/src/index.ts:59`](../packages/host/webserver/src/index.ts)
+
+<a id="deepseek-aidsh-host-workspace-files"></a>
+
+## `@deepseek-ai/dsh-host-workspace-files`
+
+Requires: `sessions`
+
+```ts config-catalog
+/** Validated plugin configuration. */
+export interface Config {
+  /** Complete-result bound of one listing level (hidden rows count toward it). */
+  maxEntries: number
+  /** Byte cap of one text read; longer files return truncated. */
+  maxTextBytes: number
+  /** Byte cap of one served image; larger files fail with workspace-too-large. */
+  maxImageBytes: number
+}
+```
+
+Source: [`packages/host/workspace-files/src/index.ts:102`](../packages/host/workspace-files/src/index.ts)
 
 <a id="deepseek-aidsh-invariants"></a>
 
@@ -3298,6 +3318,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-user-questions` ([`packages/client/ui-user-questions/src/index.ts`](../packages/client/ui-user-questions/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-workflow-run` ([`packages/client/ui-workflow-run/src/index.ts`](../packages/client/ui-workflow-run/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-workspace` ([`packages/client/ui-workspace/src/index.ts`](../packages/client/ui-workspace/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-workspace-files` ([`packages/client/ui-workspace-files/src/index.ts`](../packages/client/ui-workspace-files/src/index.ts))
 - `@deepseek-ai/dsh-command-compact` — requires `commands` · `compaction` ([`packages/compaction/command-compact/src/index.ts`](../packages/compaction/command-compact/src/index.ts))
 - `@deepseek-ai/dsh-command-feedback` — requires `commands` ([`packages/feedback/command-feedback/src/index.ts`](../packages/feedback/command-feedback/src/index.ts))
 - `@deepseek-ai/dsh-command-goal` — requires `commands` · `goals` ([`packages/goal/command-goal/src/index.ts`](../packages/goal/command-goal/src/index.ts))
