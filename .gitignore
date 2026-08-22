@@ -44,3 +44,13 @@ worktrees/
 # desktop-pro update signing keys (NEVER commit private.pem)
 desktop-pro/infra/keys/
 desktop-pro/.tools/
+
+# InsureAI CLI 本地状态（检查点/会话/绑定）
+.insureai/
+
+# svg2png.mjs 默认渲染输出目录（scripts/README.md）
+.tmp-svg/
+
+# 会话本地 agent 状态
+.agent_memory.json
+.agent_tasks.json
