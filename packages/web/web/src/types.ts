@@ -23,6 +23,14 @@ export interface WebSearchRequest {
    * regardless.
    */
   readonly maxResults?: number
+  /**
+   * Optional routing hint naming which backend a provider should answer with.
+   * A provider interprets this as one of its own configured backend names and
+   * ignores it when it cannot. Omitted = the provider's default/selected backend.
+   * Provider-agnostic: this is a stable name the caller and provider agree on,
+   * not endpoint or credential details (those stay in provider configuration).
+   */
+  readonly backend?: string
 }
 
 /**

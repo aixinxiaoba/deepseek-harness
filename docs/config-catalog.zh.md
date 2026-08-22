@@ -3086,6 +3086,39 @@ export interface Config {
 
 来源：[`packages/web/web-fetch-http/src/index.ts:34`](../packages/web/web-fetch-http/src/index.ts)
 
+<a id="deepseek-aidsh-web-search-aggregator"></a>
+
+## `@deepseek-ai/dsh-web-search-aggregator`
+
+需要：`web`
+
+```ts config-catalog
+/** Plugin config. Empty engines leave the provider unavailable (an honest config condition). */
+export interface Config {
+  /** Seam id this provider registers under. Defaults to `web-search-aggregator`. */
+  providerId?: string
+  /** Ordered fallback chain; the first live engine to yield results wins. */
+  engines?: EngineEntry[]
+}
+
+/** One position in the ordered fallback chain. */
+export interface EngineEntry {
+  /** Which engine adapter to build; the position in `engines[]` is the fallback order. */
+  engine: EngineName
+  /** Endpoint base for `searxng` (`{baseURL}/search?format=json`); ignored by others. */
+  baseURL?: string
+  /** Credential reference (environment-variable name) for a commercial engine. */
+  apiKeyEnv?: string
+  /** Remove this engine from the chain when false. Defaults to true. */
+  enabled?: boolean
+}
+
+/** Known engine ids the plugin can build a `SearchEngineAdapter` for. */
+export type EngineName = 'baidu' | 'cnbing' | 'sogou' | 'duckduckgo' | 'mojeek' | 'searxng' | 'brave' | 'bing' | 'tavily'
+```
+
+来源：[`packages/web/web-search-aggregator/src/index.ts:72`](../packages/web/web-search-aggregator/src/index.ts)
+
 <a id="deepseek-aidsh-web-search-deepseek"></a>
 
 ## `@deepseek-ai/dsh-web-search-deepseek`
@@ -3109,10 +3142,42 @@ export interface Config {
   maxTokens?: number
   /** Maximum `web_search` server-tool uses per request. Defaults to 5. */
   maxUses?: number
+  /** Wire protocol for the single-endpoint legacy config. `openai` requires {@link baseURL}. */
+  protocol?: SearchProtocol
+  /**
+   * Extract citeable URLs from the model's prose when an OpenAI-style backend
+   * returns no structured search fields (legacy single-endpoint path). Named
+   * backends set their own; defaults to false (strict).
+   */
+  allowProseFallback?: boolean
+  /**
+   * Named OpenAI-style backends the provider routes a search to: an explicit
+   * `request.backend`, else auto-match against `ctx.agentDefaultModel`'s model,
+   * else the legacy single endpoint.
+   */
+  providers?: Record<string, OpenAiBackendConfig>
+}
+
+/** Wire protocol a search backend answers with. */
+export type SearchProtocol = 'anthropic' | 'openai'
+
+/** Wire-protocol matcher for a named OpenAI-style search backend (`providers`). */
+export interface OpenAiBackendConfig {
+  /** Endpoint base for `POST {baseURL}/chat/completions`. Required. */
+  baseURL: string
+  /** Credential reference resolved per search; defaults to `DEEPSEEK_API_KEY`. */
+  apiKeyEnv?: string
+  /**
+   * Model id used both as the request model AND as the auto-match key against
+   * `ctx.agentDefaultModel`'s model. Distinct backends must not share one.
+   */
+  model?: string
+  /** Extract citeable URLs from the model's prose when no structured citations. */
+  allowProseFallback?: boolean
 }
 ```
 
-来源：[`packages/web/web-search-deepseek/src/index.ts:46`](../packages/web/web-search-deepseek/src/index.ts)
+来源：[`packages/web/web-search-deepseek/src/index.ts:71`](../packages/web/web-search-deepseek/src/index.ts)
 
 <a id="deepseek-aidsh-web-search-exa"></a>
 

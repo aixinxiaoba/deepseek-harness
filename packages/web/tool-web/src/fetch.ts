@@ -430,12 +430,16 @@ export function applyWebFetchTool(ctx: Context, timeoutMs: number, maxOutputChar
   ctx.systemPrompt.section({
     name: 'tool:web_fetch',
     order: 111,
-    text: 'Use the web_fetch tool to retrieve the content of a specific HTTP(S) URL (for example a result from web_search). It returns the page content decoded to text. Cite the URL as a markdown link when you use its content.',
+    text: 'Use the web_fetch tool to retrieve the content of a specific HTTP(S) URL (for example a result from web_search). It returns the page content decoded to text. '
+      + 'Note: cross-origin redirects are NOT followed automatically — request the final HTTPS URL directly. '
+      + 'For reading a static page or current data (weather, news, docs), prefer web_search + web_fetch over browser-automation tools: they run sandbox-safe without approval, '
+      + 'while browser automation needs escalated permissions in this environment. '
+      + 'Cite the URL as a markdown link when you use its content.',
   })
 
   ctx.tools.register(defineTool({
     name: 'web_fetch',
-    description: 'Fetch the content of a specific HTTP(S) URL and return it decoded to text.',
+    description: 'Fetch the content of a specific HTTP(S) URL and return it decoded to text. Use the final HTTPS URL (cross-origin redirects are not followed).',
     parameters: {
       url: { type: 'string', required: true, description: 'The HTTP(S) URL to fetch.' },
     },

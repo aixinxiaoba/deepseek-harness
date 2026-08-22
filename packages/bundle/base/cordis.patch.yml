@@ -404,12 +404,30 @@
     - id: web
       name: '@deepseek-ai/dsh-web'
       config:
-        searchProvider: deepseek-official
+        searchProvider: web-search-aggregator
 
+    # Official DeepSeek search (dormant by default): the aggregator below is the
+    # shipped search route. Switch searchProvider back to deepseek-official to
+    # prefer structured DeepSeek results with a DeepSeek-platform key.
     - id: web-search-deepseek
       name: '@deepseek-ai/dsh-web-search-deepseek'
       config:
         apiKeyEnv: DEEPSEEK_API_KEY
+
+    # Vendor-independent multi-engine search with transparent engine failover.
+    # China-first default: Baidu, cn.bing, and Sogou are reachable on the
+    # mainland where the international engines are blocked; DuckDuckGo/Mojeek
+    # remain last-resort (useful behind a proxy). SearXNG / Brave / Bing / Tavily
+    # activate via a settings layer when configured.
+    - id: web-search-aggregator
+      name: '@deepseek-ai/dsh-web-search-aggregator'
+      config:
+        engines:
+          - engine: baidu
+          - engine: cnbing
+          - engine: sogou
+          - engine: mojeek
+          - engine: duckduckgo
 
     - id: tool-web
       name: '@deepseek-ai/dsh-tool-web'

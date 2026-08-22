@@ -8,7 +8,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, JsonValue, ToolResult, WebSearchResultView, WebSource } from '@deepseek-ai/dsh-tools'
-import type { WebSearchResult, WebSearchSource } from '@deepseek-ai/dsh-web'
+import type { WebSearchRequest, WebSearchResult, WebSearchSource } from '@deepseek-ai/dsh-web'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 
 /**
@@ -25,6 +25,12 @@ export const WEB_SEARCH_MAX_QUERIES = 4
 /** Model-facing `web_search` arguments. */
 interface WebSearchArgs {
   queries: string[]
+  /**
+   * Optional routing hint naming which backend a provider should answer with
+   * (a provider-configured name, e.g. `ark`/`zhipu`). Omitted = the provider's
+   * default/selected backend (typically matching the current agent model).
+   */
+  backend?: string
 }
 
 /**
@@ -226,6 +232,7 @@ export function presentSearchResult(args: WebSearchArgs, result: ToolResult): We
  * @param ctx - context whose `web` service performs the searches.
  * @param queries - validated non-empty queries.
  * @param maxResults - the deployment's source cap for the combined result.
+ * @param backend - optional provider backend routing hint, forwarded per request.
  * @param signal - cancellation signal forwarded to every search.
  * @returns the combined search result.
  */
@@ -233,10 +240,13 @@ async function runSearchQueries(
   ctx: Context,
   queries: string[],
   maxResults: number,
+  backend: string | undefined,
   signal: AbortSignal,
 ): Promise<WebSearchResult> {
+  const request = (query: string): WebSearchRequest =>
+    ({ query, maxResults, ...backend !== undefined && backend.length > 0 ? { backend } : {} })
   if (queries.length === 1) {
-    return ctx.web.search({ query: queries[0] as string, maxResults }, signal)
+    return ctx.web.search(request(queries[0] as string), signal)
   }
   const controller = new AbortController()
   const batchSignal = AbortSignal.any([signal, controller.signal])
@@ -244,7 +254,7 @@ async function runSearchQueries(
   const results: WebSearchResult[] = []
   const searches = queries.map(async (query, index) => {
     try {
-      results[index] = await ctx.web.search({ query, maxResults }, batchSignal)
+      results[index] = await ctx.web.search(request(query), batchSignal)
     } catch (error) {
       if (firstFailure === undefined) firstFailure = { error }
       controller.abort(error)
@@ -317,8 +327,8 @@ export function applyWebSearchTool(
     name: 'tool:web_search',
     order: 110,
     text: fetchEnabled
-      ? `Use the web_search tool to discover current information on the web. The required queries array accepts 1–${maxQueries} non-empty search queries; use a one-item array for a single search. It returns an optional answer plus a list of source URLs. Follow up with web_fetch when you need the full content of a specific result, and cite the relevant URLs as markdown links.`
-      : `Use the web_search tool to discover current information on the web. The required queries array accepts 1–${maxQueries} non-empty search queries; use a one-item array for a single search. It returns an optional answer plus a list of source URLs. Use the returned source snippets when available, and cite the relevant URLs as markdown links.`,
+      ? `Use the web_search tool to discover current information on the web. The required queries array accepts 1–${maxQueries} non-empty search queries; use a one-item array for a single search. It returns an optional answer plus a list of source URLs. Follow up with web_fetch when you need the full content of a specific result, and cite the relevant URLs as markdown links. For current facts or reading a page, prefer web_search + web_fetch over browser-automation tools: they run sandbox-safe without approval, while browser automation needs escalated permissions in this environment.`
+      : `Use the web_search tool to discover current information on the web. The required queries array accepts 1–${maxQueries} non-empty search queries; use a one-item array for a single search. It returns an optional answer plus a list of source URLs. Use the returned source snippets when available, and cite the relevant URLs as markdown links. For current facts, prefer this tool over browser-automation tools: it runs sandbox-safe without approval.`,
   })
 
   ctx.tools.register(defineTool({
@@ -330,6 +340,10 @@ export function applyWebSearchTool(
         required: true,
         items: { type: 'string' },
         description: `Required search queries; accepts 1–${maxQueries} items and merges their results.`,
+      },
+      backend: {
+        type: 'string',
+        description: 'Optional provider backend name (e.g. ark, zhipu, qwen) to route this search to; omitted uses the selected backend.',
       },
     },
     output: {
@@ -363,7 +377,7 @@ export function applyWebSearchTool(
     isConcurrencySafe: () => true,
     async execute(args, exec) {
       const queries = parseSearchArgs(args, maxQueries)
-      const result = await runSearchQueries(ctx, queries, maxResults, exec.signal)
+      const result = await runSearchQueries(ctx, queries, maxResults, args.backend, exec.signal)
       return {
         ...result.content !== undefined ? { content: result.content } : {},
         sources: result.sources.map(projectSource),

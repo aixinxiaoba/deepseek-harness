@@ -110,8 +110,10 @@ describe('tool-call timeout policy over the migrated web tools', () => {
     const searchParams = byName.get('web_search')!.parameters as { properties: Record<string, unknown>; required?: string[] }
     expect(Object.keys(fetchParams.properties)).toEqual(['url'])
     expect('timeout_ms' in fetchParams.properties).toBe(false)
-    expect(Object.keys(searchParams.properties)).toEqual(['queries'])
+    // Only the optional `backend` routing hint was added; no timeout parameter.
+    expect(Object.keys(searchParams.properties)).toEqual(['queries', 'backend'])
     expect(searchParams.required).toEqual(['queries'])
+    expect(searchParams.properties['backend']).toMatchObject({ type: 'string' })
   })
 })
 
